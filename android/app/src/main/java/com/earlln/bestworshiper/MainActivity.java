@@ -87,11 +87,17 @@ public class MainActivity extends AppCompatActivity {
                 }
                 filePathCallback = callback;
 
+                // Only media filters are narrowed. A backup file is requested as
+                // application/json, but pickers often report .json files as
+                // octet-stream and would grey them out, so those stay unfiltered —
+                // the web app validates the contents on import anyway.
                 String mime = "*/*";
                 String[] accept = params.getAcceptTypes();
-                if (accept != null && accept.length > 0 && !accept[0].isEmpty()) {
-                    // A single accept entry maps cleanly; mixed lists fall back to any file.
-                    mime = accept.length == 1 ? accept[0] : "*/*";
+                if (accept != null && accept.length == 1 && accept[0] != null) {
+                    String want = accept[0].trim();
+                    if (want.startsWith("image/") || want.startsWith("video/")) {
+                        mime = want;
+                    }
                 }
 
                 try {
