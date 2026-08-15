@@ -1,0 +1,16 @@
+{
+  "name": "bestWorshiper",
+  "short_name": "bestWorshiper",
+  "description": "영어예배 어린이 Best Worshiper 선정 관리 앱",
+  "start_url": "bestWorshiper.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#6c63ff",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

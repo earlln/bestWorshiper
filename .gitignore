@@ -1,0 +1,13 @@
+# Personal data — never commit. Children's names and selection history
+# live only in local backup JSON files, kept outside this repo.
+*backup*.json
+*seed*.json
+__*.json
+bestWorshiper_data/
+
+# OS / editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/

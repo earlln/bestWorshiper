@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>bestWorshiper 🙌</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6c63ff">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="bestWorshiper">
+<style>
+:root {
+  --bg: #0d0f14;
+  --surface: rgba(255,255,255,0.06);
+  --surface2: rgba(255,255,255,0.10);
+  --border: rgba(255,255,255,0.12);
+  --text: #e8eaf6;
+  --text-dim: rgba(232,234,246,0.55);
+  --accent: #6c63ff;
+  --good: #00c853;
+  --warn: #ffab40;
+  --bad: #ff5252;
+  --gold: #ffd740;
+  --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+#topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  padding: 14px 20px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(10px);
+}
+.brand { font-size: 18px; font-weight: 700; }
+.version-tag { font-size: 11px; font-weight: 600; color: var(--text-dim); vertical-align: middle; }
+#tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn:hover { background: var(--surface2); color: var(--text); }
+.tab-btn.active { background: var(--accent); border-color: transparent; color: #fff; }
+
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-dim); cursor: pointer; font-size: 17px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.icon-btn:hover { background: var(--surface2); color: var(--text); }
+
+#main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  margin-bottom: 16px;
+}
+.panel-header h2 { font-size: 18px; font-weight: 700; }
+.hint { font-size: 12px; color: var(--text-dim); }
+.row-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.card h3 { font-size: 14px; margin-bottom: 10px; }
+
+input[type="text"], input[type="date"], input[type="number"], input[type="file"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+input:focus { outline: none; border-color: var(--accent); }
+.s-input { width: 90px; }
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  transition: all 0.15s;
+  display: inline-block;
+}
+.btn:hover { background: rgba(255,255,255,0.16); }
+.btn.accent { background: var(--accent); border-color: transparent; color: #fff; }
+.btn.accent:hover { filter: brightness(1.15); }
+.btn.danger { border-color: var(--bad); color: var(--bad); background: transparent; }
+.btn.danger:hover { background: rgba(255,82,82,0.15); }
+.btn.small { padding: 4px 10px; font-size: 11px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.file-btn { cursor: pointer; }
+
+.chk-inline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+
+.hidden { display: none !important; }
+
+/* Week tab */
+.week-date-row { display: flex; align-items: center; gap: 10px; }
+.badge {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 20px;
+  background: var(--surface2);
+}
+.badge.mode-new { color: var(--good); }
+.badge.mode-edit { color: var(--warn); }
+
+.week-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; }
+@media (max-width: 800px) { .week-grid { grid-template-columns: 1fr; } }
+
+.kid-check-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.kid-check-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 7px;
+  cursor: pointer;
+}
+.kid-check-row:hover { background: var(--surface2); }
+.kid-thumb {
+  width: 32px; height: 32px; border-radius: 50%;
+  object-fit: cover; background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0; overflow: hidden;
+}
+.kid-thumb img, .kid-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.kid-check-row .kname { flex: 1; font-size: 13px; }
+.kid-check-row .kscore { font-size: 11px; color: var(--text-dim); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+th { color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+tr.winner-row { background: rgba(255,215,64,0.06); }
+
+.score-pos { color: var(--good); font-weight: 700; }
+.score-neg { color: var(--bad); font-weight: 700; }
+.score-zero { color: var(--text-dim); }
+
+.mini-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.mini-btn:hover { background: rgba(255,255,255,0.18); }
+table input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+
+.week-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+/* Kids grid */
+.kids-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.kid-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+  position: relative;
+}
+.kid-card.inactive { opacity: 0.45; }
+.kid-card-media {
+  width: 100%; aspect-ratio: 1/1; border-radius: 8px;
+  background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; overflow: hidden; cursor: pointer; margin-bottom: 8px;
+}
+.kid-card-media img, .kid-card-media video { width: 100%; height: 100%; object-fit: cover; }
+.kid-card-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; word-break: keep-all; }
+.kid-card-score { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.kid-card-actions { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.kid-card-flag { position: absolute; top: 8px; left: 8px; font-size: 10px; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 6px; color: var(--text-dim); }
+.kid-card-order { position: absolute; top: 8px; right: 8px; font-size: 10px; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 6px; color: var(--text-dim); }
+
+/* Stepper (tap-based number control, no typing) */
+.stepper { display: flex; align-items: center; gap: 8px; }
+.step-btn {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); font-size: 17px; line-height: 1; cursor: pointer;
+}
+.step-btn:hover { background: rgba(255,255,255,0.18); }
+.step-val { min-width: 26px; text-align: center; font-size: 14px; font-weight: 700; }
+
+select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+select:focus { outline: none; border-color: var(--accent); }
+
+/* History */
+.history-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+}
+.history-date { font-size: 13px; font-weight: 700; width: 90px; flex-shrink: 0; }
+.history-winners { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; }
+.winner-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--surface2); border-radius: 20px;
+  padding: 3px 10px 3px 3px; font-size: 12px;
+}
+.history-actions { display: flex; gap: 6px; }
+
+/* Points */
+.points-row-expand { background: rgba(255,255,255,0.02); }
+.ledger-list { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.ledger-item { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 4px 6px; }
+.ledger-item .ldelta { width: 40px; font-weight: 700; }
+.ledger-item .lreason { flex: 1; color: var(--text-dim); }
+.add-point-row { display: flex; gap: 6px; align-items: center; padding: 8px 6px; flex-wrap: wrap; }
+.add-point-row input[type="number"] { width: 60px; }
+.add-point-row input[type="text"] { width: 160px; }
+
+/* Settings */
+.settings-cards { display: flex; flex-direction: column; gap: 14px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.setting-key { font-size: 13px; }
+.danger-zone { border-color: var(--bad); }
+
+/* Modal */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200; padding: 16px;
+}
+.modal-box {
+  background: #161921; border: 1px solid var(--border);
+  border-radius: 14px; padding: 22px;
+  width: 380px; max-width: 100%; max-height: 90vh; overflow-y: auto;
+}
+.modal-box label { display: block; font-size: 12px; color: var(--text-dim); margin: 12px 0 6px; }
+.modal-box input[type="text"], .modal-box input[type="file"] { width: 100%; }
+.modal-title { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 700; }
+.modal-close { background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; }
+.media-preview { margin-top: 10px; width: 100%; max-height: 200px; border-radius: 8px; overflow: hidden; background: var(--surface2); display: flex; align-items: center; justify-content: center; min-height: 60px; }
+.media-preview img, .media-preview video { max-width: 100%; max-height: 200px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.lightbox-box { width: auto; max-width: 90vw; text-align: center; }
+.lightbox-box img, .lightbox-box video { max-width: 85vw; max-height: 80vh; border-radius: 8px; }
+
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: rgba(30,33,44,0.95); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 20px; font-size: 13px;
+  z-index: 300; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">🙌 bestWorshiper <span id="app-version-label" class="version-tag"></span></div>
+  <nav id="tabs">
+    <button class="tab-btn active" data-tab="week">이번주 선정</button>
+    <button class="tab-btn" data-tab="kids">아이들 관리</button>
+    <button class="tab-btn" data-tab="history">히스토리</button>
+    <button class="tab-btn" data-tab="points">포인트</button>
+  </nav>
+  <button id="settings-gear-btn" class="icon-btn" title="설정" aria-label="설정">⚙</button>
+</header>
+
+<main id="main">
+
+  <section id="tab-week" class="tab-panel active">
+    <div class="panel-header">
+      <h2>이번주 Best Worshiper 선정</h2>
+      <div class="week-date-row">
+        <label style="font-size:12px;color:var(--text-dim)">날짜</label>
+        <input type="date" id="week-date-input">
+        <span id="week-mode-badge" class="badge"></span>
+      </div>
+    </div>
+    <div class="week-grid">
+      <div class="card">
+        <h3>후보자 등록</h3>
+        <div class="row-actions" style="margin-bottom:8px">
+          <select id="candidate-sort-mode">
+            <option value="alpha">가나다순</option>
+            <option value="priority">우선순위순</option>
+          </select>
+          <input type="text" id="candidate-search" placeholder="이름 검색 (선택)" style="flex:1;min-width:100px">
+        </div>
+        <div class="row-actions" style="margin-bottom:8px">
+          <button class="btn small" data-action="selectAllCandidates" data-select="1">전체 선택</button>
+          <button class="btn small" data-action="selectAllCandidates" data-select="0">전체 해제</button>
+          <button class="btn small" id="copy-last-week-btn">지난주 후보 그대로</button>
+          <span class="hint" id="candidate-count-label"></span>
+        </div>
+        <div id="candidate-list" class="kid-check-list"></div>
+      </div>
+      <div class="card">
+        <h3>후보자 점수 &amp; Best Worshiper 선정</h3>
+        <div class="hint" style="margin-bottom:8px">감점(자동)은 이 날짜 기준 최근 선정 이력으로 계산됩니다. ± 버튼으로 준 점수는 이 날짜(<span id="week-points-date-label"></span>)로 기록됩니다. 총점이 높은 순으로 정렬됩니다.</div>
+        <div class="row-actions" style="margin-bottom:10px">
+          <label style="font-size:12px;color:var(--text-dim)">선정 인원</label>
+          <div class="stepper">
+            <button class="step-btn" data-action="winnerCountStep" data-delta="-1">−</button>
+            <span class="step-val" id="winner-count-display">3</span>
+            <button class="step-btn" data-action="winnerCountStep" data-delta="1">+</button>
+          </div>
+          <button id="auto-select-btn" class="btn small accent">상위 N명 자동 선정</button>
+        </div>
+        <div id="candidate-score-table"></div>
+      </div>
+    </div>
+    <div class="week-actions">
+      <button id="week-save-btn" class="btn accent">저장</button>
+      <button id="week-delete-btn" class="btn danger hidden">이번주 기록 삭제</button>
+    </div>
+  </section>
+
+  <section id="tab-kids" class="tab-panel">
+    <div class="panel-header">
+      <h2>아이들 관리</h2>
+      <div class="row-actions">
+        <select id="kids-sort-mode">
+          <option value="alpha">가나다순</option>
+          <option value="priority">우선순위순</option>
+        </select>
+        <input type="text" id="kids-search" placeholder="이름 검색 (선택)">
+        <label class="chk-inline"><input type="checkbox" id="kids-show-inactive"> 비활성 포함</label>
+        <button id="kid-add-btn" class="btn accent">+ 아이 추가</button>
+      </div>
+    </div>
+    <div id="kids-priority-hint" class="hint hidden" style="margin-bottom:10px">우선순위순에서는 카드의 ▲▼ 버튼으로 순서를 바꿀 수 있습니다. 후보자 등록 화면에서 "우선순위순"을 선택하면 이 순서로 표시됩니다.</div>
+    <div id="kids-grid" class="kids-grid"></div>
+  </section>
+
+  <section id="tab-history" class="tab-panel">
+    <div class="panel-header">
+      <h2>히스토리</h2>
+      <div class="row-actions">
+        <input type="text" id="history-search" placeholder="이름으로 검색...">
+        <button id="history-export-text-btn" class="btn">📋 텍스트로 보기</button>
+      </div>
+    </div>
+    <div class="card"><div id="history-table"></div></div>
+  </section>
+
+  <section id="tab-points" class="tab-panel">
+    <div class="panel-header">
+      <h2>포인트</h2>
+      <div class="hint">감점(자동)은 오늘 날짜 기준입니다. 이름을 클릭하면 상세 내역이 열립니다.</div>
+    </div>
+    <div class="card"><div id="points-table"></div></div>
+  </section>
+
+</main>
+
+<div id="kid-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-title"><span id="kid-modal-title">아이 추가</span><button class="modal-close" id="kid-modal-close">✕</button></div>
+    <label>이름</label>
+    <input type="text" id="kid-name-input" placeholder="이름">
+    <label>사진 / 동영상</label>
+    <input type="file" id="kid-media-input" accept="image/*,video/*">
+    <div id="kid-media-preview" class="media-preview">🧒</div>
+    <button id="kid-media-remove" class="btn small hidden" style="margin-top:8px">미디어 제거</button>
+    <label class="chk-inline hidden" id="kid-active-row" style="margin-top:14px"><input type="checkbox" id="kid-active-input"> 활성 (이번주 후보로 등록 가능)</label>
+    <div class="modal-actions">
+      <button id="kid-cancel-btn" class="btn">취소</button>
+      <button id="kid-save-btn" class="btn accent">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="lightbox-modal" class="modal hidden">
+  <div class="modal-box lightbox-box">
+    <div class="modal-title"><span></span><button class="modal-close" id="lightbox-close">✕</button></div>
+    <div id="lightbox-content"></div>
+  </div>
+</div>
+
+<div id="text-export-modal" class="modal hidden">
+  <div class="modal-box" style="width:480px">
+    <div class="modal-title"><span>히스토리 텍스트</span><button class="modal-close" id="text-export-close">✕</button></div>
+    <p class="hint" style="margin:8px 0">아래 내용을 복사하거나 파일로 저장할 수 있습니다.</p>
+    <textarea id="text-export-area" readonly style="width:100%;height:320px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:12px;font-family:'Consolas',monospace;resize:vertical"></textarea>
+    <div class="modal-actions">
+      <button id="text-export-download-btn" class="btn">⬇ .txt 다운로드</button>
+      <button id="text-export-copy-btn" class="btn accent">📋 복사하기</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-box" style="width:440px">
+    <div class="modal-title"><span>설정</span><button class="modal-close" id="settings-modal-close">✕</button></div>
+    <div class="settings-cards">
+      <div class="card">
+        <h3>자동 감점 규칙</h3>
+        <p class="hint">최근에 Best Worshiper로 선정된 아이는 이후 몇 주간 자동으로 감점을 받습니다. 지난주 -N점, 그 전주 -(N-1)점 ... 순으로 1점씩 줄어들다가 N주가 지나면 감점이 사라집니다. (기본값 N=5)</p>
+        <div class="setting-row">
+          <div class="setting-key">적용 주수 (N)</div>
+          <div class="stepper">
+            <button class="step-btn" data-action="decayWeeksStep" data-delta="-1">−</button>
+            <span class="step-val" id="settings-decay-weeks-display">5</span>
+            <button class="step-btn" data-action="decayWeeksStep" data-delta="1">+</button>
+          </div>
+        </div>
+        <button id="settings-save-btn" class="btn accent">저장</button>
+      </div>
+      <div class="card">
+        <h3>📱 홈 화면에 앱으로 추가</h3>
+        <p class="hint"><b>아이폰</b>: Safari로 열기 → 하단 공유 버튼 → "홈 화면에 추가"</p>
+        <p class="hint" style="margin-top:4px"><b>안드로이드</b>: Chrome으로 열기 → 오른쪽 위 메뉴(⋮) → "홈 화면에 추가" / "앱 설치"</p>
+      </div>
+      <div class="card">
+        <h3>데이터 백업</h3>
+        <p class="hint" style="margin-bottom:10px">사진/동영상을 포함한 전체 데이터를 파일로 저장하거나 복원할 수 있습니다.</p>
+        <div class="row-actions">
+          <button id="export-btn" class="btn">⬇ 내보내기 (JSON 다운로드)</button>
+          <label class="btn file-btn">⬆ 가져오기 (JSON 업로드)<input type="file" id="import-input" accept="application/json" hidden></label>
+        </div>
+      </div>
+      <div class="card">
+        <h3>버전 정보</h3>
+        <div class="setting-row">
+          <div class="setting-key">앱 버전</div>
+          <div><b id="settings-version-label"></b></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-key">최신 버전 확인</div>
+          <button id="check-update-btn" class="btn small">↻ 업데이트 확인</button>
+        </div>
+        <p class="hint">업데이트가 있으면 앱을 새로 받아 다시 시작합니다. 저장된 데이터는 그대로 유지됩니다.</p>
+      </div>
+      <div class="card danger-zone">
+        <h3>초기화</h3>
+        <p class="hint" style="margin-bottom:10px">모든 아이 / 히스토리 / 포인트 데이터를 삭제합니다. 먼저 내보내기로 백업하는 것을 권장합니다.</p>
+        <button id="reset-btn" class="btn danger">전체 데이터 초기화</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// APP VERSION
+// ═══════════════════════════════════════════════════════════
+const APP_VERSION = '1.0.0';
+
+// ═══════════════════════════════════════════════════════════
+// INDEXEDDB LAYER
+// ═══════════════════════════════════════════════════════════
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('bestWorshiperDB', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('kids')) db.createObjectStore('kids', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('weeks')) db.createObjectStore('weeks', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('points')) db.createObjectStore('points', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+const dbPromise = idbOpen();
+async function getDB() { return dbPromise; }
+async function dbGetAll(store) {
+  const db = await getDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(store, 'readonly').objectStore(store).getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function dbPut(store, val) {
+  const db = await getDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(store, 'readwrite').objectStore(store).put(val);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function dbAdd(store, val) {
+  const db = await getDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(store, 'readwrite').objectStore(store).add(val);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function dbDelete(store, key) {
+  const db = await getDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(store, 'readwrite').objectStore(store).delete(key);
+    req.onsuccess = () => res();
+    req.onerror = () => rej(req.error);
+  });
+}
+async function dbClear(store) {
+  const db = await getDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(store, 'readwrite').objectStore(store).clear();
+    req.onsuccess = () => res();
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const state = {
+  kids: [],
+  weeks: [],
+  points: [],
+  settings: { decayWeeks: 5 },
+  currentWeekDate: null,
+  editingWeekId: null,
+  candidateIds: new Set(),
+  winnerIds: new Set(),
+  expandedKidId: null,
+  editingKidId: null,
+  kidMediaFile: undefined, // undefined = unchanged, null = removed, File = new
+  candidateSortMode: 'alpha',
+  kidsSortMode: 'alpha',
+  winnerCount: 3,
+  decayDraft: 5,
+  pointDeltaDraft: 1,
+};
+const mediaUrlCache = new Map();
+
+function todayStr() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+async function loadAll() {
+  state.kids = await dbGetAll('kids');
+  state.weeks = await dbGetAll('weeks');
+  state.points = await dbGetAll('points');
+  const s = await dbGetAll('settings');
+  state.settings = { decayWeeks: 5 };
+  s.forEach(x => state.settings[x.key] = x.value);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCORING
+// ═══════════════════════════════════════════════════════════
+function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+function recencyPenalty(kidId, asOfDate) {
+  const N = state.settings.decayWeeks || 5;
+  let minPenalty = 0;
+  for (const w of state.weeks) {
+    if (!w.winnerIds.includes(kidId)) continue;
+    const wa = Math.round(daysBetween(w.date, asOfDate) / 7);
+    if (wa >= 1 && wa <= N) {
+      const pen = -(N - wa + 1);
+      if (pen < minPenalty) minPenalty = pen;
+    }
+  }
+  return minPenalty;
+}
+
+function manualTotal(kidId) {
+  return state.points.filter(p => p.kidId === kidId).reduce((s, p) => s + p.delta, 0);
+}
+
+function computeScore(kidId, asOfDate) {
+  const manual = manualTotal(kidId);
+  const penalty = recencyPenalty(kidId, asOfDate);
+  return { manual, penalty, total: manual + penalty };
+}
+
+function kidById(id) {
+  return state.kids.find(k => k.id === id) || { id, name: '(삭제된 아이)', active: false, media: null };
+}
+
+function getSortOrder(kid) {
+  return kid.sortOrder != null ? kid.sortOrder : kid.id;
+}
+
+function sortKids(kids, mode) {
+  const arr = [...kids];
+  if (mode === 'priority') {
+    arr.sort((a, b) => getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name, 'ko'));
+  } else {
+    arr.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  }
+  return arr;
+}
+
+async function moveKidPriority(kidId, direction) {
+  const ordered = sortKids(state.kids, 'priority');
+  const idx = ordered.findIndex(k => k.id === kidId);
+  const swapIdx = idx + direction;
+  if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
+  const a = ordered[idx], b = ordered[swapIdx];
+  const aOrder = getSortOrder(a), bOrder = getSortOrder(b);
+  await dbPut('kids', { ...a, sortOrder: bOrder });
+  await dbPut('kids', { ...b, sortOrder: aOrder });
+  await loadAll();
+  renderKidsTab();
+}
+
+// ═══════════════════════════════════════════════════════════
+// MEDIA HELPERS
+// ═══════════════════════════════════════════════════════════
+function mediaURL(kid) {
+  if (!kid.media) return null;
+  const cached = mediaUrlCache.get(kid.id);
+  if (cached && cached.blob === kid.media) return cached.url;
+  if (cached) URL.revokeObjectURL(cached.url);
+  const url = URL.createObjectURL(kid.media);
+  mediaUrlCache.set(kid.id, { blob: kid.media, url });
+  return url;
+}
+function mediaThumbHTML(kid, cls) {
+  const url = mediaURL(kid);
+  if (!url) return `<div class="${cls}">🧒</div>`;
+  if (kid.mediaType === 'video') return `<div class="${cls}" data-action="openLightbox" data-id="${kid.id}"><video src="${url}" muted playsinline preload="metadata"></video></div>`;
+  return `<div class="${cls}" data-action="openLightbox" data-id="${kid.id}"><img src="${url}" alt=""></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'week') renderWeekTab();
+  if (name === 'kids') renderKidsTab();
+  if (name === 'history') renderHistoryTab();
+  if (name === 'points') renderPointsTab();
+}
+
+function openSettingsModal() {
+  renderSettingsTab();
+  document.getElementById('settings-modal').classList.remove('hidden');
+}
+function closeSettingsModal() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEEK TAB
+// ═══════════════════════════════════════════════════════════
+function loadWeekForDate(dateStr) {
+  state.currentWeekDate = dateStr;
+  const existing = state.weeks.find(w => w.date === dateStr);
+  if (existing) {
+    state.editingWeekId = existing.id;
+    state.candidateIds = new Set(existing.candidateIds);
+    state.winnerIds = new Set(existing.winnerIds);
+  } else {
+    state.editingWeekId = null;
+    state.candidateIds = new Set();
+    state.winnerIds = new Set();
+  }
+}
+
+function renderWeekTab() {
+  const dateInput = document.getElementById('week-date-input');
+  if (!state.currentWeekDate) loadWeekForDate(todayStr());
+  dateInput.value = state.currentWeekDate;
+
+  const badge = document.getElementById('week-mode-badge');
+  const delBtn = document.getElementById('week-delete-btn');
+  if (state.editingWeekId) {
+    badge.textContent = '기존 기록 수정 중';
+    badge.className = 'badge mode-edit';
+    delBtn.classList.remove('hidden');
+  } else {
+    badge.textContent = '새 기록';
+    badge.className = 'badge mode-new';
+    delBtn.classList.add('hidden');
+  }
+
+  document.getElementById('week-points-date-label').textContent = state.currentWeekDate;
+  renderCandidatePicker();
+  renderCandidateScoreTable();
+}
+
+function renderCandidatePicker() {
+  const search = (document.getElementById('candidate-search').value || '').trim().toLowerCase();
+  const list = document.getElementById('candidate-list');
+  const kids = sortKids(
+    state.kids
+      .filter(k => k.active)
+      .filter(k => !search || k.name.toLowerCase().includes(search)),
+    state.candidateSortMode
+  );
+
+  if (kids.length === 0) {
+    list.innerHTML = state.kids.length === 0
+      ? '<div class="hint" style="padding:8px;line-height:1.7">등록된 아이가 없습니다.<br>· 백업 파일이 있다면 ⚙ 설정 → <b>가져오기</b><br>· 처음이라면 <b>아이들 관리</b> 탭에서 추가</div>'
+      : '<div class="hint" style="padding:8px">조건에 맞는 아이가 없습니다.</div>';
+    return;
+  }
+
+  list.innerHTML = kids.map(k => {
+    const checked = state.candidateIds.has(k.id) ? 'checked' : '';
+    const score = computeScore(k.id, state.currentWeekDate);
+    return `
+      <label class="kid-check-row">
+        <input type="checkbox" data-action="toggleCandidate" data-id="${k.id}" ${checked}>
+        ${mediaThumbHTMLSmall(k)}
+        <span class="kname">${escapeHtml(k.name)}</span>
+        <span class="kscore">${fmtScore(score.total)}</span>
+      </label>`;
+  }).join('');
+
+  document.getElementById('candidate-count-label').textContent =
+    `선택 ${state.candidateIds.size}명 / 표시 ${kids.length}명`;
+}
+
+function selectAllCandidates(select) {
+  const search = (document.getElementById('candidate-search').value || '').trim().toLowerCase();
+  const visible = state.kids
+    .filter(k => k.active)
+    .filter(k => !search || k.name.toLowerCase().includes(search));
+  visible.forEach(k => {
+    if (select) state.candidateIds.add(k.id);
+    else { state.candidateIds.delete(k.id); state.winnerIds.delete(k.id); }
+  });
+  renderCandidatePicker();
+  renderCandidateScoreTable();
+}
+
+function copyLastWeekCandidates() {
+  const prior = state.weeks
+    .filter(w => w.date < state.currentWeekDate)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (!prior) { showToast('이전 주 기록이 없습니다.'); return; }
+  const activeIds = prior.candidateIds.filter(id => kidById(id).active);
+  state.candidateIds = new Set(activeIds);
+  state.winnerIds = new Set();
+  renderCandidatePicker();
+  renderCandidateScoreTable();
+  showToast(`${prior.date} 후보 ${activeIds.length}명을 불러왔습니다.`);
+}
+
+function mediaThumbHTMLSmall(kid) {
+  const url = mediaURL(kid);
+  if (!url) return `<span class="kid-thumb">🧒</span>`;
+  if (kid.mediaType === 'video') return `<span class="kid-thumb"><video src="${url}" muted></video></span>`;
+  return `<span class="kid-thumb"><img src="${url}" alt=""></span>`;
+}
+
+function fmtScore(n) {
+  if (n > 0) return `<span class="score-pos">+${n}</span>`;
+  if (n < 0) return `<span class="score-neg">${n}</span>`;
+  return `<span class="score-zero">0</span>`;
+}
+
+function renderCandidateScoreTable() {
+  const box = document.getElementById('candidate-score-table');
+  const rows = [...state.candidateIds].map(id => kidById(id));
+  if (rows.length === 0) {
+    box.innerHTML = '<div class="hint">왼쪽에서 이번주 후보자를 선택하세요.</div>';
+    return;
+  }
+  const scored = rows.map(k => ({ kid: k, score: computeScore(k.id, state.currentWeekDate) }))
+    .sort((a, b) => b.score.total - a.score.total);
+
+  box.innerHTML = `
+    <table>
+      <thead><tr><th></th><th>이름</th><th>수동점수</th><th>감점(자동)</th><th>총점</th><th>±</th><th>선정</th></tr></thead>
+      <tbody>
+        ${scored.map(({ kid, score }) => `
+          <tr class="${state.winnerIds.has(kid.id) ? 'winner-row' : ''}">
+            <td>${mediaThumbHTMLSmall(kid)}</td>
+            <td>${escapeHtml(kid.name)}</td>
+            <td>${fmtScore(score.manual)}</td>
+            <td>${fmtScore(score.penalty)}</td>
+            <td>${fmtScore(score.total)}</td>
+            <td>
+              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} 후보 평가 +">+</button>
+              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} 후보 평가 −">−</button>
+            </td>
+            <td><input type="checkbox" data-action="toggleWinner" data-id="${kid.id}" ${state.winnerIds.has(kid.id) ? 'checked' : ''}></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function stepWinnerCount(delta) {
+  state.winnerCount = Math.max(1, state.winnerCount + delta);
+  document.getElementById('winner-count-display').textContent = state.winnerCount;
+}
+
+function autoSelectWinners() {
+  if (state.candidateIds.size === 0) { showToast('먼저 후보자를 등록해주세요.'); return; }
+  const n = state.winnerCount;
+  const scored = [...state.candidateIds]
+    .map(id => ({ id, total: computeScore(id, state.currentWeekDate).total }))
+    .sort((a, b) => b.total - a.total);
+  state.winnerIds = new Set(scored.slice(0, n).map(x => x.id));
+  renderCandidateScoreTable();
+  showToast(`점수 상위 ${Math.min(n, scored.length)}명이 이번주 Best Worshiper로 선정되었습니다. 확인 후 저장을 눌러주세요.`);
+}
+
+async function saveWeek() {
+  if (state.candidateIds.size === 0) { showToast('후보자를 1명 이상 선택해주세요.'); return; }
+  const rec = {
+    date: state.currentWeekDate,
+    candidateIds: [...state.candidateIds],
+    winnerIds: [...state.winnerIds],
+  };
+  if (state.editingWeekId) {
+    rec.id = state.editingWeekId;
+    await dbPut('weeks', rec);
+  } else {
+    await dbAdd('weeks', rec);
+  }
+  await loadAll();
+  loadWeekForDate(state.currentWeekDate);
+  renderWeekTab();
+  showToast('저장되었습니다.');
+}
+
+async function deleteWeek() {
+  if (!state.editingWeekId) return;
+  if (!confirm(`${state.currentWeekDate} 기록을 삭제할까요?`)) return;
+  await dbDelete('weeks', state.editingWeekId);
+  await loadAll();
+  loadWeekForDate(state.currentWeekDate);
+  renderWeekTab();
+  showToast('삭제되었습니다.');
+}
+
+// ═══════════════════════════════════════════════════════════
+// KIDS TAB
+// ═══════════════════════════════════════════════════════════
+function renderKidsTab() {
+  const search = (document.getElementById('kids-search').value || '').trim().toLowerCase();
+  const showInactive = document.getElementById('kids-show-inactive').checked;
+  const grid = document.getElementById('kids-grid');
+  const isPriority = state.kidsSortMode === 'priority';
+  document.getElementById('kids-priority-hint').classList.toggle('hidden', !isPriority);
+
+  const kids = sortKids(
+    state.kids
+      .filter(k => showInactive || k.active)
+      .filter(k => !search || k.name.toLowerCase().includes(search)),
+    state.kidsSortMode
+  );
+
+  if (kids.length === 0) {
+    grid.innerHTML = '<div class="hint">등록된 아이가 없습니다.</div>';
+    return;
+  }
+
+  grid.innerHTML = kids.map((k, i) => {
+    const score = computeScore(k.id, todayStr());
+    return `
+    <div class="kid-card ${k.active ? '' : 'inactive'}">
+      ${k.active ? '' : '<div class="kid-card-flag">비활성</div>'}
+      ${isPriority ? `<div class="kid-card-order">${i + 1}</div>` : ''}
+      ${mediaThumbHTML(k, 'kid-card-media')}
+      <div class="kid-card-name">${escapeHtml(k.name)}</div>
+      <div class="kid-card-score">총점 ${fmtScore(score.total)}</div>
+      <div class="kid-card-actions">
+        ${isPriority ? `
+          <button class="mini-btn" data-action="moveKid" data-id="${k.id}" data-dir="-1" title="위로">▲</button>
+          <button class="mini-btn" data-action="moveKid" data-id="${k.id}" data-dir="1" title="아래로">▼</button>` : ''}
+        <button class="btn small" data-action="editKid" data-id="${k.id}">수정</button>
+        <button class="btn small danger" data-action="deleteKid" data-id="${k.id}">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openKidModal(kidId) {
+  state.editingKidId = kidId || null;
+  state.kidMediaFile = undefined;
+  const title = document.getElementById('kid-modal-title');
+  const nameInput = document.getElementById('kid-name-input');
+  const preview = document.getElementById('kid-media-preview');
+  const removeBtn = document.getElementById('kid-media-remove');
+  const activeRow = document.getElementById('kid-active-row');
+  const activeInput = document.getElementById('kid-active-input');
+  document.getElementById('kid-media-input').value = '';
+
+  if (kidId) {
+    const k = kidById(kidId);
+    title.textContent = '아이 정보 수정';
+    nameInput.value = k.name;
+    activeRow.classList.remove('hidden');
+    activeInput.checked = k.active;
+    if (k.media) {
+      removeBtn.classList.remove('hidden');
+      preview.innerHTML = k.mediaType === 'video'
+        ? `<video src="${mediaURL(k)}" controls muted style="max-width:100%;max-height:200px"></video>`
+        : `<img src="${mediaURL(k)}" alt="">`;
+    } else {
+      removeBtn.classList.add('hidden');
+      preview.innerHTML = '🧒';
+    }
+  } else {
+    title.textContent = '아이 추가';
+    nameInput.value = '';
+    activeRow.classList.add('hidden');
+    activeInput.checked = true;
+    removeBtn.classList.add('hidden');
+    preview.innerHTML = '🧒';
+  }
+  document.getElementById('kid-modal').classList.remove('hidden');
+}
+
+function closeKidModal() {
+  document.getElementById('kid-modal').classList.add('hidden');
+}
+
+function handleKidMediaChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  state.kidMediaFile = file;
+  const url = URL.createObjectURL(file);
+  const preview = document.getElementById('kid-media-preview');
+  const isVideo = file.type.startsWith('video/');
+  preview.innerHTML = isVideo
+    ? `<video src="${url}" controls muted style="max-width:100%;max-height:200px"></video>`
+    : `<img src="${url}" alt="">`;
+  document.getElementById('kid-media-remove').classList.remove('hidden');
+}
+
+function handleKidMediaRemove() {
+  state.kidMediaFile = null;
+  document.getElementById('kid-media-input').value = '';
+  document.getElementById('kid-media-preview').innerHTML = '🧒';
+  document.getElementById('kid-media-remove').classList.add('hidden');
+}
+
+async function saveKid() {
+  const name = document.getElementById('kid-name-input').value.trim();
+  if (!name) { showToast('이름을 입력해주세요.'); return; }
+  const active = document.getElementById('kid-active-input').checked;
+
+  if (state.editingKidId) {
+    const k = kidById(state.editingKidId);
+    const rec = { id: k.id, name, active, media: k.media, mediaType: k.mediaType, sortOrder: getSortOrder(k), createdAt: k.createdAt };
+    if (state.kidMediaFile === null) { rec.media = null; rec.mediaType = null; }
+    else if (state.kidMediaFile instanceof File) { rec.media = state.kidMediaFile; rec.mediaType = state.kidMediaFile.type.startsWith('video/') ? 'video' : 'image'; }
+    await dbPut('kids', rec);
+  } else {
+    const maxOrder = state.kids.reduce((m, k) => Math.max(m, getSortOrder(k)), -1);
+    const rec = { name, active: true, media: null, mediaType: null, sortOrder: maxOrder + 1, createdAt: Date.now() };
+    if (state.kidMediaFile instanceof File) { rec.media = state.kidMediaFile; rec.mediaType = state.kidMediaFile.type.startsWith('video/') ? 'video' : 'image'; }
+    await dbAdd('kids', rec);
+  }
+  await loadAll();
+  closeKidModal();
+  renderKidsTab();
+  showToast('저장되었습니다.');
+}
+
+async function deleteKid(kidId) {
+  const k = kidById(kidId);
+  const usedInHistory = state.weeks.some(w => w.candidateIds.includes(kidId) || w.winnerIds.includes(kidId));
+  if (usedInHistory) {
+    if (!confirm(`"${k.name}"은(는) 히스토리 기록이 있습니다. 완전히 삭제하면 히스토리에서 "(삭제된 아이)"로 표시됩니다.\n대신 "비활성화"만 하시겠습니까?\n\n확인 = 비활성화만 함 / 취소 = 다음 안내로`)) {
+      if (!confirm(`정말로 "${k.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+      await dbDelete('kids', kidId);
+      state.points.filter(p => p.kidId === kidId).forEach(p => dbDelete('points', p.id));
+    } else {
+      await dbPut('kids', { ...k, active: false });
+    }
+  } else {
+    if (!confirm(`"${k.name}"을(를) 삭제할까요?`)) return;
+    await dbDelete('kids', kidId);
+  }
+  await loadAll();
+  renderKidsTab();
+  showToast('처리되었습니다.');
+}
+
+// ═══════════════════════════════════════════════════════════
+// HISTORY TAB
+// ═══════════════════════════════════════════════════════════
+function renderHistoryTab() {
+  const search = (document.getElementById('history-search').value || '').trim().toLowerCase();
+  const box = document.getElementById('history-table');
+  const weeks = [...state.weeks].sort((a, b) => b.date.localeCompare(a.date));
+  const filtered = weeks.filter(w => {
+    if (!search) return true;
+    return w.winnerIds.concat(w.candidateIds).some(id => kidById(id).name.toLowerCase().includes(search));
+  });
+
+  if (filtered.length === 0) {
+    box.innerHTML = '<div class="hint">기록이 없습니다.</div>';
+    return;
+  }
+
+  box.innerHTML = filtered.map(w => `
+    <div class="history-item">
+      <div class="history-date">${w.date}</div>
+      <div class="history-winners">
+        ${w.winnerIds.map(id => {
+          const k = kidById(id);
+          return `<span class="winner-chip">${mediaThumbHTMLSmall(k)} ${escapeHtml(k.name)}</span>`;
+        }).join('') || '<span class="hint">선정 없음</span>'}
+      </div>
+      <div class="hint">후보 ${w.candidateIds.length}명</div>
+      <div class="history-actions">
+        <button class="btn small" data-action="editWeek" data-week="${w.date}">수정</button>
+        <button class="btn small danger" data-action="deleteHistoryWeek" data-id="${w.id}" data-week="${w.date}">삭제</button>
+      </div>
+    </div>`).join('');
+}
+
+function buildHistoryText() {
+  const weeks = [...state.weeks].sort((a, b) => b.date.localeCompare(a.date));
+  const lines = weeks.map(w => {
+    const names = w.winnerIds.map(id => kidById(id).name).join(', ') || '(선정 없음)';
+    return `${w.date}, ${names}`;
+  });
+  const header = `bestWorshiper 히스토리 (${todayStr()} 기준, 총 ${weeks.length}주)`;
+  return [header, '', ...lines].join('\n');
+}
+
+function openTextExportModal() {
+  document.getElementById('text-export-area').value = buildHistoryText();
+  document.getElementById('text-export-modal').classList.remove('hidden');
+}
+function closeTextExportModal() {
+  document.getElementById('text-export-modal').classList.add('hidden');
+}
+async function copyHistoryText() {
+  const area = document.getElementById('text-export-area');
+  try {
+    await navigator.clipboard.writeText(area.value);
+    showToast('클립보드에 복사되었습니다.');
+  } catch (e) {
+    area.select();
+    document.execCommand('copy');
+    showToast('클립보드에 복사되었습니다.');
+  }
+}
+function downloadHistoryText() {
+  const blob = new Blob([document.getElementById('text-export-area').value], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bestWorshiper_history_${todayStr()}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('다운로드되었습니다.');
+}
+
+async function deleteHistoryWeek(id, dateStr) {
+  if (!confirm(`${dateStr} 기록을 삭제할까요?`)) return;
+  await dbDelete('weeks', id);
+  await loadAll();
+  renderHistoryTab();
+  showToast('삭제되었습니다.');
+}
+
+// ═══════════════════════════════════════════════════════════
+// POINTS TAB
+// ═══════════════════════════════════════════════════════════
+function renderPointsTab() {
+  const box = document.getElementById('points-table');
+  const today = todayStr();
+  const rows = state.kids.filter(k => k.active).map(k => ({ kid: k, score: computeScore(k.id, today) }))
+    .sort((a, b) => b.score.total - a.score.total);
+
+  box.innerHTML = `
+    <table>
+      <thead><tr><th></th><th>이름</th><th>수동점수</th><th>감점(자동,오늘기준)</th><th>총점</th><th>±</th><th></th></tr></thead>
+      <tbody>
+        ${rows.map(({ kid, score }) => `
+          <tr>
+            <td>${mediaThumbHTMLSmall(kid)}</td>
+            <td style="cursor:pointer" data-action="toggleLedger" data-id="${kid.id}">${escapeHtml(kid.name)}</td>
+            <td>${fmtScore(score.manual)}</td>
+            <td>${fmtScore(score.penalty)}</td>
+            <td>${fmtScore(score.total)}</td>
+            <td>
+              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1">+</button>
+              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1">−</button>
+            </td>
+            <td><button class="btn small" data-action="toggleLedger" data-id="${kid.id}">${state.expandedKidId === kid.id ? '닫기' : '상세'}</button></td>
+          </tr>
+          ${state.expandedKidId === kid.id ? `
+          <tr class="points-row-expand"><td colspan="7">${renderLedger(kid.id)}</td></tr>` : ''}
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderLedger(kidId) {
+  const events = state.points.filter(p => p.kidId === kidId).sort((a, b) => b.date.localeCompare(a.date));
+  return `
+    <div class="ledger-list">
+      ${events.length === 0 ? '<div class="hint">수동 포인트 내역이 없습니다.</div>' : events.map(p => `
+        <div class="ledger-item">
+          <span>${p.date}</span>
+          <span class="ldelta">${fmtScore(p.delta)}</span>
+          <span class="lreason">${escapeHtml(p.reason || '')}</span>
+          <button class="btn small danger" data-action="deletePoint" data-id="${p.id}" data-kid="${kidId}">삭제</button>
+        </div>`).join('')}
+    </div>
+    <div class="add-point-row">
+      <div class="stepper">
+        <button class="step-btn" data-action="pointDeltaStep" data-delta="-1">−</button>
+        <span class="step-val" id="new-point-delta-display-${kidId}">${state.pointDeltaDraft}</span>
+        <button class="step-btn" data-action="pointDeltaStep" data-delta="1">+</button>
+      </div>
+      <input type="text" id="new-point-reason-${kidId}" placeholder="사유 (선택)">
+      <input type="date" id="new-point-date-${kidId}" value="${todayStr()}">
+      <button class="btn small accent" data-action="addPoint" data-id="${kidId}">추가</button>
+    </div>`;
+}
+
+async function quickPoint(kidId, delta, date, reason) {
+  await dbAdd('points', {
+    kidId,
+    delta,
+    reason: reason || (delta > 0 ? '빠른 +점수' : '빠른 -점수'),
+    date: date || todayStr(),
+  });
+  await loadAll();
+  refreshAllTabs();
+}
+
+function stepPointDelta(delta) {
+  state.pointDeltaDraft += delta;
+  const display = document.getElementById(`new-point-delta-display-${state.expandedKidId}`);
+  if (display) display.textContent = state.pointDeltaDraft;
+}
+
+async function addPoint(kidId) {
+  const reasonInput = document.getElementById(`new-point-reason-${kidId}`);
+  const dateInput = document.getElementById(`new-point-date-${kidId}`);
+  const delta = state.pointDeltaDraft;
+  if (!delta) { showToast('0이 아닌 점수를 선택해주세요.'); return; }
+  await dbAdd('points', { kidId, delta, reason: reasonInput.value.trim(), date: dateInput.value || todayStr() });
+  state.pointDeltaDraft = 1;
+  await loadAll();
+  renderPointsTab();
+  showToast('포인트가 추가되었습니다.');
+}
+
+async function deletePoint(pointId) {
+  await dbDelete('points', pointId);
+  await loadAll();
+  renderPointsTab();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS TAB
+// ═══════════════════════════════════════════════════════════
+function renderSettingsTab() {
+  state.decayDraft = state.settings.decayWeeks || 5;
+  document.getElementById('settings-decay-weeks-display').textContent = state.decayDraft;
+}
+
+function stepDecayWeeks(delta) {
+  state.decayDraft = Math.min(20, Math.max(1, state.decayDraft + delta));
+  document.getElementById('settings-decay-weeks-display').textContent = state.decayDraft;
+}
+
+async function saveSettings() {
+  const n = state.decayDraft;
+  await dbPut('settings', { key: 'decayWeeks', value: n });
+  await loadAll();
+  showToast('설정이 저장되었습니다.');
+  refreshAllTabs();
+}
+
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(dataUrl) {
+  return fetch(dataUrl).then(r => r.blob());
+}
+
+async function exportData() {
+  const kids = await Promise.all(state.kids.map(async k => ({
+    ...k,
+    media: k.media ? await blobToBase64(k.media) : null,
+  })));
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    kids,
+    weeks: state.weeks,
+    points: state.points,
+    settings: state.settings,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bestWorshiper_backup_${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('내보내기 완료.');
+}
+
+async function importData(file) {
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch (e) { showToast('올바른 JSON 파일이 아닙니다.'); return; }
+  if (!confirm('가져오기를 하면 현재 데이터를 모두 덮어씁니다. 계속할까요?')) return;
+
+  await dbClear('kids'); await dbClear('weeks'); await dbClear('points'); await dbClear('settings');
+
+  const idMap = new Map();
+  for (const k of (data.kids || [])) {
+    const media = k.media ? await base64ToBlob(k.media) : null;
+    const newId = await dbAdd('kids', { name: k.name, active: k.active, media, mediaType: k.mediaType || null, sortOrder: k.sortOrder, createdAt: k.createdAt || Date.now() });
+    idMap.set(k.id, newId);
+  }
+  for (const w of (data.weeks || [])) {
+    await dbAdd('weeks', {
+      date: w.date,
+      candidateIds: w.candidateIds.map(id => idMap.get(id)).filter(x => x != null),
+      winnerIds: w.winnerIds.map(id => idMap.get(id)).filter(x => x != null),
+    });
+  }
+  for (const p of (data.points || [])) {
+    const kidId = idMap.get(p.kidId);
+    if (kidId == null) continue;
+    await dbAdd('points', { kidId, delta: p.delta, reason: p.reason, date: p.date });
+  }
+  if (data.settings) {
+    for (const key of Object.keys(data.settings)) await dbPut('settings', { key, value: data.settings[key] });
+  }
+  await loadAll();
+  refreshAllTabs();
+  showToast('가져오기 완료.');
+}
+
+async function checkForUpdate() {
+  showToast('업데이트 확인 중...');
+  try {
+    const resp = await fetch('bestWorshiper.html?checkver=' + Date.now(), { cache: 'no-store' });
+    const text = await resp.text();
+    const m = text.match(/const APP_VERSION = '([^']+)'/);
+    const latest = m ? m[1] : null;
+    if (!latest) { showToast('버전을 확인할 수 없습니다.'); return; }
+    if (latest === APP_VERSION) { showToast(`최신 버전입니다 (v${APP_VERSION})`); return; }
+    if (!confirm(`새 버전 v${latest} 이 있습니다. (현재 v${APP_VERSION})\n지금 업데이트할까요? 저장된 데이터는 유지됩니다.`)) return;
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    for (const k of await caches.keys()) await caches.delete(k);
+    location.reload(true);
+  } catch (e) {
+    showToast('업데이트 확인 실패: 인터넷 연결을 확인해주세요.');
+  }
+}
+
+async function resetAllData() {
+  if (!confirm('정말로 모든 데이터를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')) return;
+  if (!confirm('마지막 확인입니다. 백업을 먼저 하셨나요? 계속 진행할까요?')) return;
+  await dbClear('kids'); await dbClear('weeks'); await dbClear('points');
+  await loadAll();
+  refreshAllTabs();
+  showToast('초기화되었습니다.');
+}
+
+// ═══════════════════════════════════════════════════════════
+// LIGHTBOX
+// ═══════════════════════════════════════════════════════════
+function openLightbox(kidId) {
+  const k = kidById(kidId);
+  if (!k.media) return;
+  const url = mediaURL(k);
+  const content = document.getElementById('lightbox-content');
+  content.innerHTML = k.mediaType === 'video'
+    ? `<video src="${url}" controls autoplay muted></video>`
+    : `<img src="${url}" alt="">`;
+  document.getElementById('lightbox-modal').classList.remove('hidden');
+}
+function closeLightbox() {
+  document.getElementById('lightbox-modal').classList.add('hidden');
+  document.getElementById('lightbox-content').innerHTML = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// UTIL
+// ═══════════════════════════════════════════════════════════
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function refreshAllTabs() {
+  const active = document.querySelector('.tab-panel.active').id.replace('tab-', '');
+  switchTab(active);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EVENT WIRING
+// ═══════════════════════════════════════════════════════════
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (btn) switchTab(btn.dataset.tab);
+});
+document.getElementById('settings-gear-btn').addEventListener('click', openSettingsModal);
+document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
+document.getElementById('settings-modal').addEventListener('click', e => { if (e.target.id === 'settings-modal') closeSettingsModal(); });
+
+document.getElementById('week-date-input').addEventListener('change', e => {
+  loadWeekForDate(e.target.value);
+  renderWeekTab();
+});
+document.getElementById('candidate-search').addEventListener('input', renderCandidatePicker);
+document.getElementById('candidate-sort-mode').addEventListener('change', e => {
+  state.candidateSortMode = e.target.value;
+  renderCandidatePicker();
+});
+document.getElementById('copy-last-week-btn').addEventListener('click', copyLastWeekCandidates);
+document.getElementById('week-save-btn').addEventListener('click', saveWeek);
+document.getElementById('auto-select-btn').addEventListener('click', autoSelectWinners);
+document.getElementById('week-delete-btn').addEventListener('click', deleteWeek);
+
+document.getElementById('kids-search').addEventListener('input', renderKidsTab);
+document.getElementById('kids-sort-mode').addEventListener('change', e => {
+  state.kidsSortMode = e.target.value;
+  renderKidsTab();
+});
+document.getElementById('kids-show-inactive').addEventListener('change', renderKidsTab);
+document.getElementById('kid-add-btn').addEventListener('click', () => openKidModal(null));
+document.getElementById('kid-modal-close').addEventListener('click', closeKidModal);
+document.getElementById('kid-cancel-btn').addEventListener('click', closeKidModal);
+document.getElementById('kid-save-btn').addEventListener('click', saveKid);
+document.getElementById('kid-media-input').addEventListener('change', handleKidMediaChange);
+document.getElementById('kid-media-remove').addEventListener('click', handleKidMediaRemove);
+
+document.getElementById('history-search').addEventListener('input', renderHistoryTab);
+document.getElementById('history-export-text-btn').addEventListener('click', openTextExportModal);
+document.getElementById('text-export-close').addEventListener('click', closeTextExportModal);
+document.getElementById('text-export-modal').addEventListener('click', e => { if (e.target.id === 'text-export-modal') closeTextExportModal(); });
+document.getElementById('text-export-copy-btn').addEventListener('click', copyHistoryText);
+document.getElementById('text-export-download-btn').addEventListener('click', downloadHistoryText);
+
+document.getElementById('settings-save-btn').addEventListener('click', saveSettings);
+document.getElementById('export-btn').addEventListener('click', exportData);
+document.getElementById('import-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) importData(f);
+  e.target.value = '';
+});
+document.getElementById('reset-btn').addEventListener('click', resetAllData);
+document.getElementById('check-update-btn').addEventListener('click', checkForUpdate);
+
+document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+document.getElementById('lightbox-modal').addEventListener('click', e => { if (e.target.id === 'lightbox-modal') closeLightbox(); });
+document.getElementById('kid-modal').addEventListener('click', e => { if (e.target.id === 'kid-modal') closeKidModal(); });
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const action = t.dataset.action;
+  const id = t.dataset.id ? Number(t.dataset.id) : null;
+  switch (action) {
+    case 'editKid': openKidModal(id); break;
+    case 'deleteKid': deleteKid(id); break;
+    case 'openLightbox': openLightbox(id); break;
+    case 'editWeek':
+      loadWeekForDate(t.dataset.week);
+      switchTab('week');
+      break;
+    case 'deleteHistoryWeek': deleteHistoryWeek(id, t.dataset.week); break;
+    case 'quickPoint': quickPoint(id, Number(t.dataset.delta), t.dataset.date, t.dataset.reason); break;
+    case 'moveKid': moveKidPriority(id, Number(t.dataset.dir)); break;
+    case 'selectAllCandidates': selectAllCandidates(t.dataset.select === '1'); break;
+    case 'winnerCountStep': stepWinnerCount(Number(t.dataset.delta)); break;
+    case 'decayWeeksStep': stepDecayWeeks(Number(t.dataset.delta)); break;
+    case 'pointDeltaStep': stepPointDelta(Number(t.dataset.delta)); break;
+    case 'addPoint': addPoint(id); break;
+    case 'deletePoint': deletePoint(id); break;
+    case 'toggleLedger':
+      state.expandedKidId = state.expandedKidId === id ? null : id;
+      renderPointsTab();
+      break;
+  }
+});
+
+document.addEventListener('change', e => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const action = t.dataset.action;
+  const id = Number(t.dataset.id);
+  if (action === 'toggleCandidate') {
+    if (t.checked) state.candidateIds.add(id);
+    else { state.candidateIds.delete(id); state.winnerIds.delete(id); }
+    document.getElementById('candidate-count-label').textContent =
+      `선택 ${state.candidateIds.size}명 / 표시 ${document.querySelectorAll('#candidate-list input[type=checkbox]').length}명`;
+    renderCandidateScoreTable();
+  }
+  if (action === 'toggleWinner') {
+    if (t.checked) state.winnerIds.add(id);
+    else state.winnerIds.delete(id);
+    renderCandidateScoreTable();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+(async function init() {
+  document.getElementById('app-version-label').textContent = 'v' + APP_VERSION;
+  document.getElementById('settings-version-label').textContent = APP_VERSION;
+  await loadAll();
+  state.currentWeekDate = todayStr();
+  loadWeekForDate(state.currentWeekDate);
+  switchTab('week');
+})();
+
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
