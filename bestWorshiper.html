@@ -263,12 +263,23 @@ select:focus { outline: none; border-color: var(--accent); }
   flex-wrap: wrap;
 }
 .history-date { font-size: 13px; font-weight: 700; width: 90px; flex-shrink: 0; }
-.history-winners { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; }
-.winner-chip {
+.history-summary { flex: 1; }
+.history-chips { flex-basis: 100%; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.cand-chip {
   display: flex; align-items: center; gap: 5px;
-  background: var(--surface2); border-radius: 20px;
+  background: var(--surface2); border: 1px solid transparent;
+  border-radius: 20px;
   padding: 3px 10px 3px 3px; font-size: 12px;
+  color: var(--text-dim);
 }
+/* The chosen ones stand out from the rest of the field. */
+.cand-chip.is-winner {
+  background: rgba(255,215,64,0.12);
+  border-color: rgba(255,215,64,0.5);
+  color: var(--gold);
+  font-weight: 700;
+}
+.cand-chip .crown { font-size: 11px; }
 .history-actions { display: flex; gap: 6px; }
 .history-candidates { flex-basis: 100%; font-size: 11px; line-height: 1.5; }
 
@@ -552,7 +563,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -924,10 +935,11 @@ function renderCandidatePicker() {
   list.innerHTML = kids.map(k => {
     const checked = state.candidateIds.has(k.id) ? 'checked' : '';
     const s = computeScore(k.id, state.currentWeekDate, basis);
+    // Only the automatic parts belong here: hand-given points come from the
+    // selection screen, which hasn't happened yet at registration time.
     const notes = [];
     if (s.penalty !== 0) notes.push(`감점 ${fmtNum(s.penalty)} (${mmdd(s.penaltyFrom)} 선정, ${s.penaltyWeeksAgo}주 전)`);
     if (s.bonus !== 0) notes.push(`가점 +${fmtNum(s.bonus)} (${s.streak}주 연속)`);
-    if (s.manual !== 0) notes.push(`수동 ${s.manual > 0 ? '+' : ''}${fmtNum(s.manual)}`);
 
     return `
       <label class="kid-check-row">
@@ -1322,23 +1334,34 @@ function renderHistoryTab() {
     return;
   }
 
-  box.innerHTML = filtered.map(w => `
+  box.innerHTML = filtered.map(w => {
+    const winners = new Set(w.winnerIds);
+    // Everyone who ran is shown; the chosen are listed first and marked, so a
+    // week reads as "these took part, these won" at a glance.
+    const ordered = [...w.candidateIds].sort((a, b) =>
+      (winners.has(b) ? 1 : 0) - (winners.has(a) ? 1 : 0));
+
+    const chips = ordered.map(id => {
+      const k = kidById(id);
+      const won = winners.has(id);
+      return `<span class="cand-chip${won ? ' is-winner' : ''}">
+        ${mediaThumbHTMLSmall(k)}${won ? '<span class="crown">🏆</span>' : ''}${escapeHtml(k.name)}
+      </span>`;
+    }).join('');
+
+    return `
     <div class="history-item">
       <div class="history-date">${w.date}</div>
-      <div class="history-winners">
-        ${w.winnerIds.map(id => {
-          const k = kidById(id);
-          return `<span class="winner-chip">${mediaThumbHTMLSmall(k)} ${escapeHtml(k.name)}</span>`;
-        }).join('') || '<span class="hint">선정 없음</span>'}
-      </div>
-      <div class="history-candidates hint" title="${escapeHtml(w.candidateIds.map(id => kidById(id).name).join(', '))}">
-        후보 ${w.candidateIds.length}명${w.candidateIds.length ? ': ' + escapeHtml(w.candidateIds.map(id => kidById(id).name).join(', ')) : ''}
-      </div>
+      <div class="history-summary hint">후보 ${w.candidateIds.length}명 · 선정 ${w.winnerIds.length}명</div>
       <div class="history-actions">
         <button class="btn small" data-action="editWeek" data-week="${w.date}">수정</button>
         <button class="btn small danger" data-action="deleteHistoryWeek" data-id="${w.id}" data-week="${w.date}">삭제</button>
       </div>
-    </div>`).join('');
+      <div class="history-chips">
+        ${chips || '<span class="hint">후보 없음</span>'}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 /**
