@@ -437,7 +437,7 @@ select:focus { outline: none; border-color: var(--accent); }
         </div>
         <button id="settings-save-btn" class="btn accent">저장</button>
       </div>
-      <div class="card">
+      <div class="card" id="install-guide-card">
         <h3>📱 홈 화면에 앱으로 추가</h3>
         <p class="hint"><b>아이폰</b>: Safari로 열기 → 하단 공유 버튼 → "홈 화면에 추가"</p>
         <p class="hint" style="margin-top:4px"><b>안드로이드</b>: Chrome으로 열기 → 오른쪽 위 메뉴(⋮) → "홈 화면에 추가" / "앱 설치"</p>
@@ -456,11 +456,11 @@ select:focus { outline: none; border-color: var(--accent); }
           <div class="setting-key">앱 버전</div>
           <div><b id="settings-version-label"></b></div>
         </div>
-        <div class="setting-row">
+        <div class="setting-row" id="update-check-row">
           <div class="setting-key">최신 버전 확인</div>
           <button id="check-update-btn" class="btn small">↻ 업데이트 확인</button>
         </div>
-        <p class="hint">업데이트가 있으면 앱을 새로 받아 다시 시작합니다. 저장된 데이터는 그대로 유지됩니다.</p>
+        <p class="hint" id="update-hint">업데이트가 있으면 앱을 새로 받아 다시 시작합니다. 저장된 데이터는 그대로 유지됩니다.</p>
       </div>
       <div class="card danger-zone">
         <h3>초기화</h3>
@@ -1084,16 +1084,11 @@ async function copyHistoryText() {
   }
 }
 function downloadHistoryText() {
-  const blob = new Blob([document.getElementById('text-export-area').value], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `bestWorshiper_history_${todayStr()}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('다운로드되었습니다.');
+  saveToDevice(
+    `bestWorshiper_history_${todayStr()}.txt`,
+    document.getElementById('text-export-area').value,
+    'text/plain;charset=utf-8'
+  );
 }
 
 async function deleteHistoryWeek(id, dateStr) {
@@ -1241,11 +1236,25 @@ async function exportData() {
     points: state.points,
     settings: state.settings,
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const json = JSON.stringify(payload, null, 2);
+  saveToDevice(`bestWorshiper_backup_${todayStr()}.json`, json, 'application/json');
+}
+
+/**
+ * Hands a file to the user. Inside the Android app a WebView cannot follow a
+ * blob: download, so the native bridge writes it to Downloads instead.
+ */
+function saveToDevice(fileName, text, mimeType) {
+  if (window.AndroidBridge && typeof window.AndroidBridge.saveFile === 'function') {
+    const b64 = btoa(unescape(encodeURIComponent(text)));
+    window.AndroidBridge.saveFile(fileName, b64, mimeType);
+    return;
+  }
+  const blob = new Blob([text], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `bestWorshiper_backup_${todayStr()}.json`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1454,16 +1463,29 @@ document.addEventListener('change', e => {
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
+const IS_ANDROID_APP = !!(window.AndroidBridge && window.AndroidBridge.saveFile);
+
 (async function init() {
   document.getElementById('app-version-label').textContent = 'v' + APP_VERSION;
   document.getElementById('settings-version-label').textContent = APP_VERSION;
+
+  if (IS_ANDROID_APP) {
+    // Installed as a real app: the home-screen guide and the web update
+    // check don't apply — updates arrive as a new APK.
+    document.getElementById('install-guide-card').classList.add('hidden');
+    document.getElementById('update-check-row').classList.add('hidden');
+    document.getElementById('update-hint').textContent =
+      '안드로이드 앱으로 설치되어 있습니다. 새 버전은 새 APK 파일을 설치하면 적용되며, 저장된 데이터는 유지됩니다.';
+  }
+
   await loadAll();
   state.currentWeekDate = todayStr();
   loadWeekForDate(state.currentWeekDate);
   switchTab('week');
 })();
 
-if ('serviceWorker' in navigator && window.isSecureContext) {
+// The Android build already ships its assets locally, so it needs no cache layer.
+if ('serviceWorker' in navigator && window.isSecureContext && !IS_ANDROID_APP) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
   });

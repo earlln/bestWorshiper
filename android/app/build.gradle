@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.earlln.bestworshiper'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.earlln.bestworshiper"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        debug {
+            // Sideloaded build the user installs directly.
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    // Serves bundled assets over an https:// origin so IndexedDB works.
+    implementation 'androidx.webkit:webkit:1.9.0'
+}
+
+// Keep the APK's bundled copy of the web app in sync with the repo root,
+// so bestWorshiper.html stays the single source of truth.
+def webAssets = ['bestWorshiper.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']
+
+tasks.register('syncWebAssets', Copy) {
+    from(rootProject.projectDir.parentFile) {
+        include webAssets
+    }
+    into layout.projectDirectory.dir('src/main/assets')
+}
+
+tasks.named('preBuild') {
+    dependsOn 'syncWebAssets'
+}
