@@ -507,7 +507,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -983,6 +983,21 @@ async function saveCandidates() {
   if (state.candidateIds.size === 0) { showToast('후보자를 1명 이상 선택해주세요.'); return; }
   const existing = savedWeek();
   const candidateIds = [...state.candidateIds];
+
+  // Only reachable when revisiting a week that was already judged: dropping a
+  // kid from the roster also drops their win, so say so before it happens.
+  const droppedWinners = (existing ? existing.winnerIds : [])
+    .filter(id => !candidateIds.includes(id));
+  if (droppedWinners.length > 0) {
+    const names = droppedWinners.map(id => kidById(id).name).join(', ');
+    const ok = confirm(
+      `${names} 은(는) ${state.currentWeekDate} 의 Best Worshiper로 선정되어 있습니다.\n\n` +
+      `후보에서 빼면 이 주의 선정에서도 함께 제외되고, 이후 감점 계산에서도 빠집니다.\n\n` +
+      `계속할까요?`
+    );
+    if (!ok) return;
+  }
+
   const rec = {
     date: state.currentWeekDate,
     candidateIds,
