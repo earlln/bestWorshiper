@@ -355,7 +355,7 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
     </div>
     <div class="card">
-      <div class="hint" style="margin-bottom:10px">이번주 Best Worshiper 후보로 등록한 아이들을 선택하고 <b>저장</b>하세요. 저장한 후보가 "이번주 선정" 화면에 나타납니다.</div>
+      <div class="hint" style="margin-bottom:10px">이번주 Best Worshiper 후보로 등록한 아이들을 선택하고 <b>저장</b>하세요. 저장한 후보가 "이번주 선정" 화면에 나타납니다.<br>오른쪽 점수는 <b>감점(자동)+가점(연속)</b> 합계입니다. ± 로 주는 수동점수는 "이번주 선정" 화면에서 더해집니다.</div>
       <div id="cand-rule-summary"></div>
       <div class="row-actions" style="margin-bottom:8px">
         <select id="candidate-sort-mode">
@@ -563,7 +563,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -935,11 +935,13 @@ function renderCandidatePicker() {
   list.innerHTML = kids.map(k => {
     const checked = state.candidateIds.has(k.id) ? 'checked' : '';
     const s = computeScore(k.id, state.currentWeekDate, basis);
-    // Only the automatic parts belong here: hand-given points come from the
-    // selection screen, which hasn't happened yet at registration time.
+    // Only the automatic parts belong here — hand-given points come from the
+    // selection screen, which hasn't happened when a roster is put together.
+    // The figure shown excludes them too, so it always matches its reasons.
     const notes = [];
     if (s.penalty !== 0) notes.push(`감점 ${fmtNum(s.penalty)} (${mmdd(s.penaltyFrom)} 선정, ${s.penaltyWeeksAgo}주 전)`);
     if (s.bonus !== 0) notes.push(`가점 +${fmtNum(s.bonus)} (${s.streak}주 연속)`);
+    const autoScore = round1(s.penalty + s.bonus);
 
     return `
       <label class="kid-check-row">
@@ -947,9 +949,9 @@ function renderCandidatePicker() {
         ${mediaThumbHTMLSmall(k)}
         <span class="kname">
           ${escapeHtml(k.name)}
-          <span class="kreason">${notes.length ? notes.join(' · ') : '해당 점수 없음'}</span>
+          <span class="kreason">${notes.length ? notes.join(' · ') : '감점·가점 없음'}</span>
         </span>
-        <span class="kscore">${fmtScore(s.total)}</span>
+        <span class="kscore">${fmtScore(autoScore)}</span>
       </label>`;
   }).join('');
 
