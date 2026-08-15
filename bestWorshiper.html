@@ -152,8 +152,15 @@ input:focus { outline: none; border-color: var(--accent); }
   font-size: 16px; flex-shrink: 0; overflow: hidden;
 }
 .kid-thumb img, .kid-thumb video { width: 100%; height: 100%; object-fit: cover; }
-.kid-check-row .kname { flex: 1; font-size: 13px; }
-.kid-check-row .kscore { font-size: 11px; color: var(--text-dim); }
+.kid-check-row { align-items: flex-start; }
+.kid-check-row input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; margin-top: 6px; cursor: pointer; }
+.kid-check-row .kname {
+  flex: 1; font-size: 13px;
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.kid-check-row .kreason { font-size: 10px; color: var(--text-dim); line-height: 1.4; }
+.kid-check-row .kscore { font-size: 13px; font-weight: 700; flex-shrink: 0; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -338,6 +345,7 @@ select:focus { outline: none; border-color: var(--accent); }
     </div>
     <div class="card">
       <div class="hint" style="margin-bottom:10px">이번주 Best Worshiper 후보로 등록한 아이들을 선택하고 <b>저장</b>하세요. 저장한 후보가 "이번주 선정" 화면에 나타납니다.</div>
+      <div id="cand-rule-summary"></div>
       <div class="row-actions" style="margin-bottom:8px">
         <select id="candidate-sort-mode">
           <option value="alpha">가나다순</option>
@@ -544,7 +552,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -862,6 +870,7 @@ function renderCandidatesTab() {
     badge.className = 'badge mode-new';
     delBtn.classList.add('hidden');
   }
+  document.getElementById('cand-rule-summary').innerHTML = renderRuleSummary();
   renderCandidatePicker();
 }
 
@@ -907,15 +916,28 @@ function renderCandidatePicker() {
     return;
   }
 
+  // Scored against the saved roster, the same basis the selection screen uses,
+  // so a kid's numbers don't differ between the two screens.
+  const saved = savedWeek();
+  const basis = saved ? saved.candidateIds : null;
+
   list.innerHTML = kids.map(k => {
     const checked = state.candidateIds.has(k.id) ? 'checked' : '';
-    const score = computeScore(k.id, state.currentWeekDate, state.candidateIds);
+    const s = computeScore(k.id, state.currentWeekDate, basis);
+    const notes = [];
+    if (s.penalty !== 0) notes.push(`감점 ${fmtNum(s.penalty)} (${mmdd(s.penaltyFrom)} 선정, ${s.penaltyWeeksAgo}주 전)`);
+    if (s.bonus !== 0) notes.push(`가점 +${fmtNum(s.bonus)} (${s.streak}주 연속)`);
+    if (s.manual !== 0) notes.push(`수동 ${s.manual > 0 ? '+' : ''}${fmtNum(s.manual)}`);
+
     return `
       <label class="kid-check-row">
         <input type="checkbox" data-action="toggleCandidate" data-id="${k.id}" ${checked}>
         ${mediaThumbHTMLSmall(k)}
-        <span class="kname">${escapeHtml(k.name)}</span>
-        <span class="kscore">${fmtScore(score.total)}</span>
+        <span class="kname">
+          ${escapeHtml(k.name)}
+          <span class="kreason">${notes.length ? notes.join(' · ') : '해당 점수 없음'}</span>
+        </span>
+        <span class="kscore">${fmtScore(s.total)}</span>
       </label>`;
   }).join('');
 
