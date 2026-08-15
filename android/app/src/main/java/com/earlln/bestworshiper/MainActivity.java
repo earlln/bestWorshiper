@@ -23,8 +23,10 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewAssetLoader;
 
+import java.io.File;
 import java.io.OutputStream;
 
 /**
@@ -42,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private ActivityResultLauncher<String> fileChooserLauncher;
+    private ActivityResultLauncher<Uri> takePictureLauncher;
+    private ActivityResultLauncher<Uri> takeVideoLauncher;
+    /** Where the camera app is writing; also what we hand back on success. */
+    private Uri pendingCaptureUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,11 +55,15 @@ public class MainActivity extends AppCompatActivity {
 
         fileChooserLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
-                uri -> {
-                    if (filePathCallback == null) return;
-                    filePathCallback.onReceiveValue(uri == null ? null : new Uri[]{uri});
-                    filePathCallback = null;
-                });
+                uri -> deliverToWeb(uri));
+
+        takePictureLauncher = registerForActivityResult(
+                new ActivityResultContracts.TakePicture(),
+                ok -> deliverToWeb(Boolean.TRUE.equals(ok) ? pendingCaptureUri : null));
+
+        takeVideoLauncher = registerForActivityResult(
+                new ActivityResultContracts.CaptureVideo(),
+                ok -> deliverToWeb(Boolean.TRUE.equals(ok) ? pendingCaptureUri : null));
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -87,18 +97,22 @@ public class MainActivity extends AppCompatActivity {
                 }
                 filePathCallback = callback;
 
+                String[] accept = params.getAcceptTypes();
+                String want = (accept != null && accept.length == 1 && accept[0] != null)
+                        ? accept[0].trim() : "";
+
+                // capture="environment" on the input means the page wants the
+                // camera itself, not a file already on the device.
+                if (params.isCaptureEnabled() && (want.startsWith("image/") || want.startsWith("video/"))) {
+                    if (launchCamera(want.startsWith("video/"))) return true;
+                    // Fall through to the picker if no camera app answered.
+                }
+
                 // Only media filters are narrowed. A backup file is requested as
                 // application/json, but pickers often report .json files as
                 // octet-stream and would grey them out, so those stay unfiltered —
                 // the web app validates the contents on import anyway.
-                String mime = "*/*";
-                String[] accept = params.getAcceptTypes();
-                if (accept != null && accept.length == 1 && accept[0] != null) {
-                    String want = accept[0].trim();
-                    if (want.startsWith("image/") || want.startsWith("video/")) {
-                        mime = want;
-                    }
-                }
+                String mime = (want.startsWith("image/") || want.startsWith("video/")) ? want : "*/*";
 
                 try {
                     fileChooserLauncher.launch(mime);
@@ -134,6 +148,38 @@ public class MainActivity extends AppCompatActivity {
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         webView.saveState(outState);
+    }
+
+    /**
+     * Hands the result back to the waiting <input type="file">. The callback must
+     * be answered exactly once — a WebView whose chooser never replies will
+     * refuse to open another one for the rest of the session.
+     */
+    private void deliverToWeb(Uri uri) {
+        if (filePathCallback == null) return;
+        filePathCallback.onReceiveValue(uri == null ? null : new Uri[]{uri});
+        filePathCallback = null;
+        pendingCaptureUri = null;
+    }
+
+    /** Opens the camera, writing into a file this app can share back. */
+    private boolean launchCamera(boolean video) {
+        try {
+            File dir = new File(getCacheDir(), "capture");
+            if (!dir.exists() && !dir.mkdirs()) return false;
+
+            File target = new File(dir, (video ? "video_" : "photo_")
+                    + System.currentTimeMillis() + (video ? ".mp4" : ".jpg"));
+            pendingCaptureUri = FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", target);
+
+            if (video) takeVideoLauncher.launch(pendingCaptureUri);
+            else takePictureLauncher.launch(pendingCaptureUri);
+            return true;
+        } catch (Exception e) {
+            pendingCaptureUri = null;
+            return false;
+        }
     }
 
     /**

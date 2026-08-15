@@ -212,6 +212,33 @@ table input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
 .step-val { min-width: 26px; text-align: center; font-size: 14px; font-weight: 700; }
 .streak-tag { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 
+/* Why a score is what it is, shown under the number itself */
+.cell-note {
+  font-size: 10px; line-height: 1.35;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.table-scroll { overflow-x: auto; }
+.rule-summary {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.rule-summary summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 12px;
+}
+.rule-summary > div { margin-top: 8px; }
+.rule-summary b { color: var(--text); }
+
 select {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -395,7 +422,17 @@ select:focus { outline: none; border-color: var(--accent); }
     <label>이름</label>
     <input type="text" id="kid-name-input" placeholder="이름">
     <label>사진 / 동영상</label>
-    <input type="file" id="kid-media-input" accept="image/*,video/*">
+    <div class="row-actions" style="gap:8px">
+      <label class="btn file-btn">📷 사진 찍기
+        <input type="file" id="kid-camera-input" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn file-btn">🎬 동영상 촬영
+        <input type="file" id="kid-video-input" accept="video/*" capture="environment" hidden>
+      </label>
+      <label class="btn file-btn">🖼 갤러리
+        <input type="file" id="kid-media-input" accept="image/*,video/*" hidden>
+      </label>
+    </div>
     <div id="kid-media-preview" class="media-preview">🧒</div>
     <button id="kid-media-remove" class="btn small hidden" style="margin-top:8px">미디어 제거</button>
     <label class="chk-inline hidden" id="kid-active-row" style="margin-top:14px"><input type="checkbox" id="kid-active-input"> 활성 (이번주 후보로 등록 가능)</label>
@@ -507,7 +544,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -593,6 +630,7 @@ const state = {
   kidsSortMode: 'alpha',
   winnerCount: 3,
   decayDraft: 5,
+  ruleSummaryOpen: true,
 };
 const mediaUrlCache = new Map();
 
@@ -616,18 +654,22 @@ async function loadAll() {
 // ═══════════════════════════════════════════════════════════
 function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
+/**
+ * Returns the penalty along with the win that caused it, so the table can show
+ * why a number is what it is without the user having to open anything.
+ */
 function recencyPenalty(kidId, asOfDate) {
   const N = state.settings.decayWeeks || 5;
-  let minPenalty = 0;
+  let result = { penalty: 0, fromDate: null, weeksAgo: null };
   for (const w of state.weeks) {
     if (!w.winnerIds.includes(kidId)) continue;
     const wa = Math.round(daysBetween(w.date, asOfDate) / 7);
     if (wa >= 1 && wa <= N) {
       const pen = -(N - wa + 1);
-      if (pen < minPenalty) minPenalty = pen;
+      if (pen < result.penalty) result = { penalty: pen, fromDate: w.date, weeksAgo: wa };
     }
   }
-  return minPenalty;
+  return result;
 }
 
 /**
@@ -691,14 +733,16 @@ function manualTotal(kidId, asOfDate) {
 
 function computeScore(kidId, asOfDate, liveCandidateIds) {
   const manual = manualTotal(kidId, asOfDate);
-  const penalty = recencyPenalty(kidId, asOfDate);
+  const pen = recencyPenalty(kidId, asOfDate);
   const { streak, bonus } = streakBonus(kidId, asOfDate, liveCandidateIds);
   return {
     manual: round1(manual),
-    penalty: round1(penalty),
+    penalty: round1(pen.penalty),
+    penaltyFrom: pen.fromDate,
+    penaltyWeeksAgo: pen.weeksAgo,
     bonus: round1(bonus),
     streak,
-    total: round1(manual + penalty + bonus),
+    total: round1(manual + pen.penalty + bonus),
   };
 }
 
@@ -910,6 +954,12 @@ function mediaThumbHTMLSmall(kid) {
   return `<span class="kid-thumb"><img src="${url}" alt=""></span>`;
 }
 
+/** 2026-08-09 -> 08/09, to keep the reasoning notes narrow enough for a phone. */
+function mmdd(dateStr) {
+  const [, m, d] = dateStr.split('-');
+  return `${m}/${d}`;
+}
+
 function fmtScore(n) {
   const v = round1(n);
   const text = Number.isInteger(v) ? String(v) : v.toFixed(1);
@@ -937,6 +987,8 @@ function renderCandidateScoreTable() {
     .sort((a, b) => b.score.total - a.score.total);
 
   box.innerHTML = `
+    ${renderRuleSummary()}
+    <div class="table-scroll">
     <table>
       <thead><tr><th></th><th>이름</th><th>수동점수</th><th>감점(자동)</th><th>가점(연속)</th><th>총점</th><th>±</th><th>선정</th></tr></thead>
       <tbody>
@@ -945,8 +997,18 @@ function renderCandidateScoreTable() {
             <td>${mediaThumbHTMLSmall(kid)}</td>
             <td>${escapeHtml(kid.name)}</td>
             <td>${fmtScore(score.manual)}</td>
-            <td>${fmtScore(score.penalty)}</td>
-            <td>${fmtScore(score.bonus)}${score.streak > 1 ? `<span class="streak-tag">${score.streak}주</span>` : ''}</td>
+            <td>
+              ${fmtScore(score.penalty)}
+              ${score.penaltyFrom
+                ? `<div class="cell-note">${mmdd(score.penaltyFrom)} 선정<br>${score.penaltyWeeksAgo}주 전</div>`
+                : '<div class="cell-note">최근 선정 없음</div>'}
+            </td>
+            <td>
+              ${fmtScore(score.bonus)}
+              ${score.streak > 1
+                ? `<div class="cell-note">${score.streak}주 연속<br>후보 등록</div>`
+                : '<div class="cell-note">연속 아님</div>'}
+            </td>
             <td>${fmtScore(score.total)}</td>
             <td>
               <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} 후보 평가 +">+</button>
@@ -955,7 +1017,32 @@ function renderCandidateScoreTable() {
             <td><input type="checkbox" data-action="toggleWinner" data-id="${kid.id}" ${state.winnerIds.has(kid.id) ? 'checked' : ''}></td>
           </tr>`).join('')}
       </tbody>
-    </table>`;
+    </table>
+    </div>`;
+}
+
+/** Spells out the rules currently in force, so the columns need no explanation. */
+function renderRuleSummary() {
+  const N = state.settings.decayWeeks || 5;
+  const cap = state.settings.streakWeeks || 0;
+  const per = state.settings.streakBonus || 0;
+
+  const decay = [];
+  for (let w = 1; w <= N; w++) decay.push(`${w}주전 −${N - w + 1}`);
+
+  const streak = (cap >= 2 && per > 0)
+    ? `2주 연속 +${fmtNum(per)} → ${cap}주 연속 +${fmtNum((cap - 1) * per)} (${cap}주까지)`
+    : '사용 안 함';
+
+  return `
+    <details class="rule-summary" ${state.ruleSummaryOpen ? 'open' : ''}>
+      <summary data-action="toggleRuleSummary">점수 규칙 (${state.currentWeekDate} 기준)</summary>
+      <div><b>감점(자동)</b> — 최근 선정된 아이: ${decay.join(' · ')} · ${N + 1}주 이상 지나면 0<br>
+      여러 번 뽑혔으면 <b>가장 최근</b> 것 하나만 적용됩니다.</div>
+      <div style="margin-top:6px"><b>가점(연속)</b> — ${streak}<br>
+      기록이 있는 주 기준이라 예배가 없던 주는 연속이 끊기지 않습니다.</div>
+      <div style="margin-top:6px"><b>수동점수</b> — ± 버튼으로 준 점수. 이 주에만 반영됩니다.</div>
+    </details>`;
 }
 
 function stepWinnerCount(delta) {
@@ -1096,7 +1183,7 @@ function openKidModal(kidId) {
   const removeBtn = document.getElementById('kid-media-remove');
   const activeRow = document.getElementById('kid-active-row');
   const activeInput = document.getElementById('kid-active-input');
-  document.getElementById('kid-media-input').value = '';
+  clearKidMediaInputs();
 
   if (kidId) {
     const k = kidById(kidId);
@@ -1128,6 +1215,11 @@ function closeKidModal() {
   document.getElementById('kid-modal').classList.add('hidden');
 }
 
+function clearKidMediaInputs() {
+  ['kid-media-input', 'kid-camera-input', 'kid-video-input']
+    .forEach(id => { document.getElementById(id).value = ''; });
+}
+
 function handleKidMediaChange(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -1143,7 +1235,7 @@ function handleKidMediaChange(e) {
 
 function handleKidMediaRemove() {
   state.kidMediaFile = null;
-  document.getElementById('kid-media-input').value = '';
+  clearKidMediaInputs();
   document.getElementById('kid-media-preview').innerHTML = '🧒';
   document.getElementById('kid-media-remove').classList.add('hidden');
 }
@@ -1741,7 +1833,9 @@ document.getElementById('kid-add-btn').addEventListener('click', () => openKidMo
 document.getElementById('kid-modal-close').addEventListener('click', closeKidModal);
 document.getElementById('kid-cancel-btn').addEventListener('click', closeKidModal);
 document.getElementById('kid-save-btn').addEventListener('click', saveKid);
-document.getElementById('kid-media-input').addEventListener('change', handleKidMediaChange);
+// Camera, camcorder and gallery all feed the same preview.
+['kid-media-input', 'kid-camera-input', 'kid-video-input']
+  .forEach(id => document.getElementById(id).addEventListener('change', handleKidMediaChange));
 document.getElementById('kid-media-remove').addEventListener('click', handleKidMediaRemove);
 
 document.getElementById('history-search').addEventListener('input', renderHistoryTab);
@@ -1796,6 +1890,8 @@ document.addEventListener('click', e => {
     case 'decayWeeksStep': stepDecayWeeks(Number(t.dataset.delta)); break;
     case 'streakWeeksStep': stepStreakWeeks(Number(t.dataset.delta)); break;
     case 'streakBonusStep': stepStreakBonus(Number(t.dataset.delta)); break;
+    // Remember whether the rules block was left open across re-renders.
+    case 'toggleRuleSummary': state.ruleSummaryOpen = !state.ruleSummaryOpen; break;
   }
 });
 
