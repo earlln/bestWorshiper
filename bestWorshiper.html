@@ -290,61 +290,72 @@ select:focus { outline: none; border-color: var(--accent); }
 <header id="topbar">
   <div class="brand">🙌 bestWorshiper <span id="app-version-label" class="version-tag"></span></div>
   <nav id="tabs">
-    <button class="tab-btn active" data-tab="week">이번주 선정</button>
-    <button class="tab-btn" data-tab="kids">아이들 관리</button>
+    <button class="tab-btn active" data-tab="candidates">등록후보</button>
+    <button class="tab-btn" data-tab="week">이번주 선정</button>
     <button class="tab-btn" data-tab="history">히스토리</button>
-    <button class="tab-btn" data-tab="points">포인트</button>
+    <button class="tab-btn" data-tab="kids">아이들 관리</button>
   </nav>
   <button id="settings-gear-btn" class="icon-btn" title="설정" aria-label="설정">⚙</button>
 </header>
 
 <main id="main">
 
-  <section id="tab-week" class="tab-panel active">
+  <section id="tab-candidates" class="tab-panel active">
     <div class="panel-header">
-      <h2>이번주 Best Worshiper 선정</h2>
+      <h2>등록후보</h2>
+      <div class="week-date-row">
+        <label style="font-size:12px;color:var(--text-dim)">날짜</label>
+        <input type="date" id="cand-date-input">
+        <span id="cand-mode-badge" class="badge"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="hint" style="margin-bottom:10px">이번주 Best Worshiper 후보로 등록한 아이들을 선택하고 <b>저장</b>하세요. 저장한 후보가 "이번주 선정" 화면에 나타납니다.</div>
+      <div class="row-actions" style="margin-bottom:8px">
+        <select id="candidate-sort-mode">
+          <option value="alpha">가나다순</option>
+          <option value="priority">우선순위순</option>
+        </select>
+        <input type="text" id="candidate-search" placeholder="이름 검색 (선택)" style="flex:1;min-width:100px">
+      </div>
+      <div class="row-actions" style="margin-bottom:8px">
+        <button class="btn small" data-action="selectAllCandidates" data-select="1">전체 선택</button>
+        <button class="btn small" data-action="selectAllCandidates" data-select="0">전체 해제</button>
+        <button class="btn small" id="copy-last-week-btn">지난주 후보 그대로</button>
+        <span class="hint" id="candidate-count-label"></span>
+      </div>
+      <div id="candidate-list" class="kid-check-list"></div>
+    </div>
+    <div class="week-actions">
+      <button id="cand-save-btn" class="btn accent">후보 저장</button>
+      <button id="cand-delete-btn" class="btn danger hidden">이 주 기록 삭제</button>
+    </div>
+  </section>
+
+  <section id="tab-week" class="tab-panel">
+    <div class="panel-header">
+      <h2>이번주 선정</h2>
       <div class="week-date-row">
         <label style="font-size:12px;color:var(--text-dim)">날짜</label>
         <input type="date" id="week-date-input">
         <span id="week-mode-badge" class="badge"></span>
       </div>
     </div>
-    <div class="week-grid">
-      <div class="card">
-        <h3>후보자 등록</h3>
-        <div class="row-actions" style="margin-bottom:8px">
-          <select id="candidate-sort-mode">
-            <option value="alpha">가나다순</option>
-            <option value="priority">우선순위순</option>
-          </select>
-          <input type="text" id="candidate-search" placeholder="이름 검색 (선택)" style="flex:1;min-width:100px">
+    <div class="card">
+      <div class="hint" style="margin-bottom:10px">감점(자동)은 이 날짜 기준 최근 선정 이력으로, 가점(연속)은 후보 연속 등록 주수로 계산됩니다. ± 버튼으로 준 점수는 <b>이 주(<span id="week-points-date-label"></span>)에만</b> 반영됩니다.</div>
+      <div class="row-actions" style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text-dim)">선정 인원</label>
+        <div class="stepper">
+          <button class="step-btn" data-action="winnerCountStep" data-delta="-1">−</button>
+          <span class="step-val" id="winner-count-display">3</span>
+          <button class="step-btn" data-action="winnerCountStep" data-delta="1">+</button>
         </div>
-        <div class="row-actions" style="margin-bottom:8px">
-          <button class="btn small" data-action="selectAllCandidates" data-select="1">전체 선택</button>
-          <button class="btn small" data-action="selectAllCandidates" data-select="0">전체 해제</button>
-          <button class="btn small" id="copy-last-week-btn">지난주 후보 그대로</button>
-          <span class="hint" id="candidate-count-label"></span>
-        </div>
-        <div id="candidate-list" class="kid-check-list"></div>
+        <button id="auto-select-btn" class="btn small accent">상위 N명 자동 선정</button>
       </div>
-      <div class="card">
-        <h3>후보자 점수 &amp; Best Worshiper 선정</h3>
-        <div class="hint" style="margin-bottom:8px">감점(자동)은 이 날짜 기준 최근 선정 이력으로 계산됩니다. ± 버튼으로 준 점수는 이 날짜(<span id="week-points-date-label"></span>)로 기록됩니다. 총점이 높은 순으로 정렬됩니다.</div>
-        <div class="row-actions" style="margin-bottom:10px">
-          <label style="font-size:12px;color:var(--text-dim)">선정 인원</label>
-          <div class="stepper">
-            <button class="step-btn" data-action="winnerCountStep" data-delta="-1">−</button>
-            <span class="step-val" id="winner-count-display">3</span>
-            <button class="step-btn" data-action="winnerCountStep" data-delta="1">+</button>
-          </div>
-          <button id="auto-select-btn" class="btn small accent">상위 N명 자동 선정</button>
-        </div>
-        <div id="candidate-score-table"></div>
-      </div>
+      <div id="candidate-score-table"></div>
     </div>
     <div class="week-actions">
-      <button id="week-save-btn" class="btn accent">저장</button>
-      <button id="week-delete-btn" class="btn danger hidden">이번주 기록 삭제</button>
+      <button id="week-save-btn" class="btn accent">선정 저장</button>
     </div>
   </section>
 
@@ -374,14 +385,6 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
     </div>
     <div class="card"><div id="history-table"></div></div>
-  </section>
-
-  <section id="tab-points" class="tab-panel">
-    <div class="panel-header">
-      <h2>포인트</h2>
-      <div class="hint">감점(자동)은 오늘 날짜 기준입니다. 이름을 클릭하면 상세 내역이 열립니다.</div>
-    </div>
-    <div class="card"><div id="points-table"></div></div>
   </section>
 
 </main>
@@ -504,7 +507,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -584,14 +587,12 @@ const state = {
   editingWeekId: null,
   candidateIds: new Set(),
   winnerIds: new Set(),
-  expandedKidId: null,
   editingKidId: null,
   kidMediaFile: undefined, // undefined = unchanged, null = removed, File = new
   candidateSortMode: 'alpha',
   kidsSortMode: 'alpha',
   winnerCount: 3,
   decayDraft: 5,
-  pointDeltaDraft: 1,
 };
 const mediaUrlCache = new Map();
 
@@ -674,15 +675,31 @@ function streakBonus(kidId, asOfDate, liveCandidateIds) {
   return { streak, bonus: Math.max(0, streak - 1) * per };
 }
 
-function manualTotal(kidId) {
-  return state.points.filter(p => p.kidId === kidId).reduce((s, p) => s + p.delta, 0);
+/** Bonuses can be fractional, so keep totals free of binary-float noise. */
+function round1(n) { return Math.round(n * 10) / 10; }
+
+/**
+ * Points given by hand count only for the week they were awarded in. Carrying
+ * them forever would let a kid scored early outrank everyone permanently, while
+ * the penalty and streak only ever look at recent weeks.
+ */
+function manualTotal(kidId, asOfDate) {
+  return state.points
+    .filter(p => p.kidId === kidId && p.date === asOfDate)
+    .reduce((s, p) => s + p.delta, 0);
 }
 
 function computeScore(kidId, asOfDate, liveCandidateIds) {
-  const manual = manualTotal(kidId);
+  const manual = manualTotal(kidId, asOfDate);
   const penalty = recencyPenalty(kidId, asOfDate);
   const { streak, bonus } = streakBonus(kidId, asOfDate, liveCandidateIds);
-  return { manual, penalty, bonus, streak, total: manual + penalty + bonus };
+  return {
+    manual: round1(manual),
+    penalty: round1(penalty),
+    bonus: round1(bonus),
+    streak,
+    total: round1(manual + penalty + bonus),
+  };
 }
 
 function kidById(id) {
@@ -753,10 +770,10 @@ function showToast(msg) {
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'candidates') renderCandidatesTab();
   if (name === 'week') renderWeekTab();
   if (name === 'kids') renderKidsTab();
   if (name === 'history') renderHistoryTab();
-  if (name === 'points') renderPointsTab();
 }
 
 function openSettingsModal() {
@@ -784,25 +801,48 @@ function loadWeekForDate(dateStr) {
   }
 }
 
-function renderWeekTab() {
-  const dateInput = document.getElementById('week-date-input');
+/** 등록후보 tab — pick who is running this week, then save. */
+function renderCandidatesTab() {
   if (!state.currentWeekDate) loadWeekForDate(todayStr());
-  dateInput.value = state.currentWeekDate;
+  document.getElementById('cand-date-input').value = state.currentWeekDate;
 
-  const badge = document.getElementById('week-mode-badge');
-  const delBtn = document.getElementById('week-delete-btn');
-  if (state.editingWeekId) {
-    badge.textContent = '기존 기록 수정 중';
+  const saved = savedWeek();
+  const badge = document.getElementById('cand-mode-badge');
+  const delBtn = document.getElementById('cand-delete-btn');
+  if (saved) {
+    badge.textContent = `저장됨 · 후보 ${saved.candidateIds.length}명`;
     badge.className = 'badge mode-edit';
     delBtn.classList.remove('hidden');
   } else {
-    badge.textContent = '새 기록';
+    badge.textContent = '미저장';
     badge.className = 'badge mode-new';
     delBtn.classList.add('hidden');
   }
-
-  document.getElementById('week-points-date-label').textContent = state.currentWeekDate;
   renderCandidatePicker();
+}
+
+function savedWeek() {
+  return state.weeks.find(w => w.date === state.currentWeekDate) || null;
+}
+
+/** 이번주 선정 tab — score the saved candidates and choose the winners. */
+function renderWeekTab() {
+  if (!state.currentWeekDate) loadWeekForDate(todayStr());
+  document.getElementById('week-date-input').value = state.currentWeekDate;
+  document.getElementById('week-points-date-label').textContent = state.currentWeekDate;
+
+  const saved = savedWeek();
+  const badge = document.getElementById('week-mode-badge');
+  if (saved && saved.winnerIds.length > 0) {
+    badge.textContent = `선정 완료 · ${saved.winnerIds.length}명`;
+    badge.className = 'badge mode-edit';
+  } else if (saved) {
+    badge.textContent = `후보 ${saved.candidateIds.length}명 · 선정 전`;
+    badge.className = 'badge mode-new';
+  } else {
+    badge.textContent = '후보 미등록';
+    badge.className = 'badge mode-new';
+  }
   renderCandidateScoreTable();
 }
 
@@ -849,7 +889,6 @@ function selectAllCandidates(select) {
     else { state.candidateIds.delete(k.id); state.winnerIds.delete(k.id); }
   });
   renderCandidatePicker();
-  renderCandidateScoreTable();
 }
 
 function copyLastWeekCandidates() {
@@ -861,7 +900,6 @@ function copyLastWeekCandidates() {
   state.candidateIds = new Set(activeIds);
   state.winnerIds = new Set();
   renderCandidatePicker();
-  renderCandidateScoreTable();
   showToast(`${prior.date} 후보 ${activeIds.length}명을 불러왔습니다.`);
 }
 
@@ -873,19 +911,29 @@ function mediaThumbHTMLSmall(kid) {
 }
 
 function fmtScore(n) {
-  if (n > 0) return `<span class="score-pos">+${n}</span>`;
-  if (n < 0) return `<span class="score-neg">${n}</span>`;
+  const v = round1(n);
+  const text = Number.isInteger(v) ? String(v) : v.toFixed(1);
+  if (v > 0) return `<span class="score-pos">+${text}</span>`;
+  if (v < 0) return `<span class="score-neg">${text}</span>`;
   return `<span class="score-zero">0</span>`;
 }
 
 function renderCandidateScoreTable() {
   const box = document.getElementById('candidate-score-table');
-  const rows = [...state.candidateIds].map(id => kidById(id));
-  if (rows.length === 0) {
-    box.innerHTML = '<div class="hint">왼쪽에서 이번주 후보자를 선택하세요.</div>';
+  const saved = savedWeek();
+
+  // The list here is the saved roster, not the live checkboxes, so scoring
+  // always reflects what was actually registered for the week.
+  if (!saved || saved.candidateIds.length === 0) {
+    box.innerHTML = `<div class="hint" style="line-height:1.8">
+      ${state.currentWeekDate} 에 저장된 후보가 없습니다.<br>
+      <b>등록후보</b> 탭에서 후보를 선택하고 <b>후보 저장</b>을 눌러주세요.
+    </div>`;
     return;
   }
-  const scored = rows.map(k => ({ kid: k, score: computeScore(k.id, state.currentWeekDate, state.candidateIds) }))
+
+  const rows = saved.candidateIds.map(id => kidById(id));
+  const scored = rows.map(k => ({ kid: k, score: computeScore(k.id, state.currentWeekDate) }))
     .sort((a, b) => b.score.total - a.score.total);
 
   box.innerHTML = `
@@ -916,42 +964,69 @@ function stepWinnerCount(delta) {
 }
 
 function autoSelectWinners() {
-  if (state.candidateIds.size === 0) { showToast('먼저 후보자를 등록해주세요.'); return; }
+  const saved = savedWeek();
+  if (!saved || saved.candidateIds.length === 0) {
+    showToast('먼저 "등록후보" 탭에서 후보를 저장해주세요.');
+    return;
+  }
   const n = state.winnerCount;
-  const scored = [...state.candidateIds]
-    .map(id => ({ id, total: computeScore(id, state.currentWeekDate, state.candidateIds).total }))
+  const scored = saved.candidateIds
+    .map(id => ({ id, total: computeScore(id, state.currentWeekDate).total }))
     .sort((a, b) => b.total - a.total);
   state.winnerIds = new Set(scored.slice(0, n).map(x => x.id));
   renderCandidateScoreTable();
-  showToast(`점수 상위 ${Math.min(n, scored.length)}명이 이번주 Best Worshiper로 선정되었습니다. 확인 후 저장을 눌러주세요.`);
+  showToast(`점수 상위 ${Math.min(n, scored.length)}명을 선정했습니다. 확인 후 "선정 저장"을 눌러주세요.`);
 }
 
-async function saveWeek() {
+/** 등록후보 tab save — records who is running, keeping any winners intact. */
+async function saveCandidates() {
   if (state.candidateIds.size === 0) { showToast('후보자를 1명 이상 선택해주세요.'); return; }
+  const existing = savedWeek();
+  const candidateIds = [...state.candidateIds];
   const rec = {
     date: state.currentWeekDate,
-    candidateIds: [...state.candidateIds],
-    winnerIds: [...state.winnerIds],
+    candidateIds,
+    // A kid dropped from the roster can no longer be one of its winners.
+    winnerIds: (existing ? existing.winnerIds : []).filter(id => candidateIds.includes(id)),
   };
-  if (state.editingWeekId) {
-    rec.id = state.editingWeekId;
-    await dbPut('weeks', rec);
-  } else {
-    await dbAdd('weeks', rec);
+  if (existing) rec.id = existing.id;
+  await dbPut('weeks', rec);
+  await loadAll();
+  loadWeekForDate(state.currentWeekDate);
+  renderCandidatesTab();
+  showToast(`후보 ${candidateIds.length}명을 저장했습니다. "이번주 선정" 탭에서 점수를 매기세요.`);
+}
+
+/** 이번주 선정 tab save — records the winners chosen from the saved roster. */
+async function saveWeek() {
+  const existing = savedWeek();
+  if (!existing || existing.candidateIds.length === 0) {
+    showToast('먼저 "등록후보" 탭에서 후보를 저장해주세요.');
+    return;
   }
+  const rec = {
+    id: existing.id,
+    date: state.currentWeekDate,
+    candidateIds: [...existing.candidateIds],
+    winnerIds: [...state.winnerIds].filter(id => existing.candidateIds.includes(id)),
+  };
+  await dbPut('weeks', rec);
   await loadAll();
   loadWeekForDate(state.currentWeekDate);
   renderWeekTab();
-  showToast('저장되었습니다.');
+  showToast(rec.winnerIds.length > 0
+    ? `${rec.winnerIds.length}명을 Best Worshiper로 저장했습니다.`
+    : '선정 없이 저장했습니다.');
 }
 
 async function deleteWeek() {
-  if (!state.editingWeekId) return;
-  if (!confirm(`${state.currentWeekDate} 기록을 삭제할까요?`)) return;
-  await dbDelete('weeks', state.editingWeekId);
+  const existing = savedWeek();
+  if (!existing) return;
+  if (!confirm(`${state.currentWeekDate} 기록(후보 ${existing.candidateIds.length}명, 선정 ${existing.winnerIds.length}명)을 삭제할까요?`)) return;
+  await dbDelete('weeks', existing.id);
   await loadAll();
   loadWeekForDate(state.currentWeekDate);
-  renderWeekTab();
+  renderCandidatesTab();
   showToast('삭제되었습니다.');
 }
 
@@ -1397,63 +1472,8 @@ async function deleteHistoryWeek(id, dateStr) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// POINTS TAB
+// WEEKLY POINTS
 // ═══════════════════════════════════════════════════════════
-function renderPointsTab() {
-  const box = document.getElementById('points-table');
-  const today = todayStr();
-  const rows = state.kids.filter(k => k.active).map(k => ({ kid: k, score: computeScore(k.id, today) }))
-    .sort((a, b) => b.score.total - a.score.total);
-
-  box.innerHTML = `
-    <table>
-      <thead><tr><th></th><th>이름</th><th>수동점수</th><th>감점(자동,오늘기준)</th><th>가점(연속)</th><th>총점</th><th>±</th><th></th></tr></thead>
-      <tbody>
-        ${rows.map(({ kid, score }) => `
-          <tr>
-            <td>${mediaThumbHTMLSmall(kid)}</td>
-            <td style="cursor:pointer" data-action="toggleLedger" data-id="${kid.id}">${escapeHtml(kid.name)}</td>
-            <td>${fmtScore(score.manual)}</td>
-            <td>${fmtScore(score.penalty)}</td>
-            <td>${fmtScore(score.bonus)}${score.streak > 1 ? `<span class="streak-tag">${score.streak}주</span>` : ''}</td>
-            <td>${fmtScore(score.total)}</td>
-            <td>
-              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1">+</button>
-              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1">−</button>
-            </td>
-            <td><button class="btn small" data-action="toggleLedger" data-id="${kid.id}">${state.expandedKidId === kid.id ? '닫기' : '상세'}</button></td>
-          </tr>
-          ${state.expandedKidId === kid.id ? `
-          <tr class="points-row-expand"><td colspan="8">${renderLedger(kid.id)}</td></tr>` : ''}
-        `).join('')}
-      </tbody>
-    </table>`;
-}
-
-function renderLedger(kidId) {
-  const events = state.points.filter(p => p.kidId === kidId).sort((a, b) => b.date.localeCompare(a.date));
-  return `
-    <div class="ledger-list">
-      ${events.length === 0 ? '<div class="hint">수동 포인트 내역이 없습니다.</div>' : events.map(p => `
-        <div class="ledger-item">
-          <span>${p.date}</span>
-          <span class="ldelta">${fmtScore(p.delta)}</span>
-          <span class="lreason">${escapeHtml(p.reason || '')}</span>
-          <button class="btn small danger" data-action="deletePoint" data-id="${p.id}" data-kid="${kidId}">삭제</button>
-        </div>`).join('')}
-    </div>
-    <div class="add-point-row">
-      <div class="stepper">
-        <button class="step-btn" data-action="pointDeltaStep" data-delta="-1">−</button>
-        <span class="step-val" id="new-point-delta-display-${kidId}">${state.pointDeltaDraft}</span>
-        <button class="step-btn" data-action="pointDeltaStep" data-delta="1">+</button>
-      </div>
-      <input type="text" id="new-point-reason-${kidId}" placeholder="사유 (선택)">
-      <input type="date" id="new-point-date-${kidId}" value="${todayStr()}">
-      <button class="btn small accent" data-action="addPoint" data-id="${kidId}">추가</button>
-    </div>`;
-}
-
 async function quickPoint(kidId, delta, date, reason) {
   await dbAdd('points', {
     kidId,
@@ -1465,30 +1485,6 @@ async function quickPoint(kidId, delta, date, reason) {
   refreshAllTabs();
 }
 
-function stepPointDelta(delta) {
-  state.pointDeltaDraft += delta;
-  const display = document.getElementById(`new-point-delta-display-${state.expandedKidId}`);
-  if (display) display.textContent = state.pointDeltaDraft;
-}
-
-async function addPoint(kidId) {
-  const reasonInput = document.getElementById(`new-point-reason-${kidId}`);
-  const dateInput = document.getElementById(`new-point-date-${kidId}`);
-  const delta = state.pointDeltaDraft;
-  if (!delta) { showToast('0이 아닌 점수를 선택해주세요.'); return; }
-  await dbAdd('points', { kidId, delta, reason: reasonInput.value.trim(), date: dateInput.value || todayStr() });
-  state.pointDeltaDraft = 1;
-  await loadAll();
-  renderPointsTab();
-  showToast('포인트가 추가되었습니다.');
-}
-
-async function deletePoint(pointId) {
-  await dbDelete('points', pointId);
-  await loadAll();
-  renderPointsTab();
-}
-
 // ═══════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════
@@ -1498,7 +1494,7 @@ function renderSettingsTab() {
   state.streakBonusDraft = state.settings.streakBonus ?? DEFAULT_SETTINGS.streakBonus;
   document.getElementById('settings-decay-weeks-display').textContent = state.decayDraft;
   document.getElementById('settings-streak-weeks-display').textContent = state.streakWeeksDraft;
-  document.getElementById('settings-streak-bonus-display').textContent = state.streakBonusDraft;
+  document.getElementById('settings-streak-bonus-display').textContent = fmtNum(state.streakBonusDraft);
   renderStreakPreview();
 }
 
@@ -1511,8 +1507,8 @@ function renderStreakPreview() {
     return;
   }
   const parts = [];
-  for (let w = 2; w <= cap; w++) parts.push(`${w}주 연속 +${(w - 1) * per}점`);
-  el.textContent = `현재 설정: ${parts.join(' · ')} (${cap}주 이상은 +${(cap - 1) * per}점으로 동일)`;
+  for (let w = 2; w <= cap; w++) parts.push(`${w}주 연속 +${fmtNum((w - 1) * per)}점`);
+  el.textContent = `현재 설정: ${parts.join(' · ')} (${cap}주 이상은 +${fmtNum((cap - 1) * per)}점으로 동일)`;
 }
 
 function stepDecayWeeks(delta) {
@@ -1526,9 +1522,16 @@ function stepStreakWeeks(delta) {
   renderStreakPreview();
 }
 
+function fmtNum(n) {
+  const v = round1(n);
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
 function stepStreakBonus(delta) {
-  state.streakBonusDraft = Math.min(20, Math.max(0, state.streakBonusDraft + delta));
-  document.getElementById('settings-streak-bonus-display').textContent = state.streakBonusDraft;
+  // Half-point steps, so a streak can nudge the ranking without overpowering
+  // the whole-number penalties.
+  state.streakBonusDraft = round1(Math.min(20, Math.max(0, state.streakBonusDraft + delta * 0.5)));
+  document.getElementById('settings-streak-bonus-display').textContent = fmtNum(state.streakBonusDraft);
   renderStreakPreview();
 }
 
@@ -1693,6 +1696,11 @@ document.getElementById('settings-gear-btn').addEventListener('click', openSetti
 document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
 document.getElementById('settings-modal').addEventListener('click', e => { if (e.target.id === 'settings-modal') closeSettingsModal(); });
 
+// Both week screens share one date; changing it on either keeps them in step.
+document.getElementById('cand-date-input').addEventListener('change', e => {
+  loadWeekForDate(e.target.value);
+  renderCandidatesTab();
+});
 document.getElementById('week-date-input').addEventListener('change', e => {
   loadWeekForDate(e.target.value);
   renderWeekTab();
@@ -1703,9 +1711,10 @@ document.getElementById('candidate-sort-mode').addEventListener('change', e => {
   renderCandidatePicker();
 });
 document.getElementById('copy-last-week-btn').addEventListener('click', copyLastWeekCandidates);
+document.getElementById('cand-save-btn').addEventListener('click', saveCandidates);
+document.getElementById('cand-delete-btn').addEventListener('click', deleteWeek);
 document.getElementById('week-save-btn').addEventListener('click', saveWeek);
 document.getElementById('auto-select-btn').addEventListener('click', autoSelectWinners);
-document.getElementById('week-delete-btn').addEventListener('click', deleteWeek);
 
 document.getElementById('kids-search').addEventListener('input', renderKidsTab);
 document.getElementById('kids-sort-mode').addEventListener('change', e => {
@@ -1762,7 +1771,7 @@ document.addEventListener('click', e => {
     case 'openLightbox': openLightbox(id); break;
     case 'editWeek':
       loadWeekForDate(t.dataset.week);
-      switchTab('week');
+      switchTab('candidates');
       break;
     case 'deleteHistoryWeek': deleteHistoryWeek(id, t.dataset.week); break;
     case 'quickPoint': quickPoint(id, Number(t.dataset.delta), t.dataset.date, t.dataset.reason); break;
@@ -1772,13 +1781,6 @@ document.addEventListener('click', e => {
     case 'decayWeeksStep': stepDecayWeeks(Number(t.dataset.delta)); break;
     case 'streakWeeksStep': stepStreakWeeks(Number(t.dataset.delta)); break;
     case 'streakBonusStep': stepStreakBonus(Number(t.dataset.delta)); break;
-    case 'pointDeltaStep': stepPointDelta(Number(t.dataset.delta)); break;
-    case 'addPoint': addPoint(id); break;
-    case 'deletePoint': deletePoint(id); break;
-    case 'toggleLedger':
-      state.expandedKidId = state.expandedKidId === id ? null : id;
-      renderPointsTab();
-      break;
   }
 });
 
@@ -1788,11 +1790,12 @@ document.addEventListener('change', e => {
   const action = t.dataset.action;
   const id = Number(t.dataset.id);
   if (action === 'toggleCandidate') {
+    // Ticking a box only edits the draft roster; it reaches the scoring screen
+    // once "후보 저장" is pressed.
     if (t.checked) state.candidateIds.add(id);
     else { state.candidateIds.delete(id); state.winnerIds.delete(id); }
     document.getElementById('candidate-count-label').textContent =
-      `선택 ${state.candidateIds.size}명 / 표시 ${document.querySelectorAll('#candidate-list input[type=checkbox]').length}명`;
-    renderCandidateScoreTable();
+      `선택 ${state.candidateIds.size}명 / 표시 ${document.querySelectorAll('#candidate-list input[type=checkbox]').length}명 · 저장 필요`;
   }
   if (action === 'toggleWinner') {
     if (t.checked) state.winnerIds.add(id);
@@ -1822,7 +1825,7 @@ const IS_ANDROID_APP = !!(window.AndroidBridge && window.AndroidBridge.saveFile)
   await loadAll();
   state.currentWeekDate = todayStr();
   loadWeekForDate(state.currentWeekDate);
-  switchTab('week');
+  switchTab('candidates');
 })();
 
 // The Android build already ships its assets locally, so it needs no cache layer.
