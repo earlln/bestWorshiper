@@ -219,6 +219,40 @@ table input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
 .step-val { min-width: 26px; text-align: center; font-size: 14px; font-weight: 700; }
 .streak-tag { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 
+/* Announcement script, read aloud during the ceremony */
+.script-panel {
+  background: rgba(108,99,255,0.08);
+  border: 1px solid rgba(108,99,255,0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.script-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 8px;
+  font-size: 12px; font-weight: 700; color: var(--accent);
+}
+.script-body {
+  max-height: 170px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-word;
+  font-size: 14px; line-height: 1.75;
+  padding-right: 4px;
+}
+.script-body::-webkit-scrollbar { width: 6px; }
+.script-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+#script-input {
+  width: 100%; height: 150px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 8px;
+  font-size: 13px; line-height: 1.6; resize: vertical;
+  font-family: inherit;
+}
+#script-input:focus { outline: none; border-color: var(--accent); }
+.script-panel code {
+  background: var(--surface2); border-radius: 4px;
+  padding: 1px 4px; font-size: 10px;
+}
+
 /* Why a score is what it is, shown under the number itself */
 .cell-note {
   font-size: 10px; line-height: 1.35;
@@ -388,7 +422,26 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
     </div>
     <div class="card">
-      <div class="hint" style="margin-bottom:10px">감점(자동)은 이 날짜 기준 최근 선정 이력으로, 가점(연속)은 후보 연속 등록 주수로 계산됩니다. ± 버튼으로 준 점수는 <b>이 주(<span id="week-points-date-label"></span>)에만</b> 반영됩니다.</div>
+      <div class="script-panel">
+        <div class="script-head">
+          <span>🎤 진행 멘트</span>
+          <button id="script-edit-btn" class="btn small">편집</button>
+        </div>
+        <div id="script-view" class="script-body"></div>
+        <div id="script-editor" class="hidden">
+          <textarea id="script-input" spellcheck="false"></textarea>
+          <div class="hint" style="margin-top:6px">
+            자동 치환: <code>{후보수}</code> 후보 인원 · <code>{후보명단}</code> 후보 이름 ·
+            <code>{선정인원}</code> 3 · <code>{선정인원영문}</code> Three · <code>{날짜}</code>
+          </div>
+          <div class="row-actions" style="margin-top:8px;justify-content:flex-end">
+            <button id="script-reset-btn" class="btn small">기본 문구</button>
+            <button id="script-cancel-btn" class="btn small">취소</button>
+            <button id="script-save-btn" class="btn small accent">저장</button>
+          </div>
+        </div>
+      </div>
+      <div class="hint" style="margin-bottom:10px">± 버튼으로 준 점수는 <b>이 주(<span id="week-points-date-label"></span>)에만</b> 반영됩니다.</div>
       <div class="row-actions" style="margin-bottom:10px">
         <label style="font-size:12px;color:var(--text-dim)">선정 인원</label>
         <div class="stepper">
@@ -563,7 +616,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -628,10 +681,23 @@ async function dbClear(store) {
 // ═══════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════
+/**
+ * Read aloud while the winners are announced. Placeholders are filled from the
+ * week on screen so the numbers and names never need editing by hand.
+ */
+const DEFAULT_SCRIPT = [
+  "We have as many as {후보수} nominees for today's Best Worshiper.",
+  'The nominees are as follows: {후보명단}',
+  'How many Best Worshipers do you think we should choose?',
+  "{선정인원영문}? Great! Let's find out who they are...",
+  'Okay, everyone... drumroll, please!',
+].join('\n');
+
 const DEFAULT_SETTINGS = {
   decayWeeks: 5,   // recent winners are penalised for this many weeks
   streakWeeks: 4,  // consecutive candidate weeks that still earn a bonus
   streakBonus: 1,  // points per consecutive week beyond the first
+  ceremonyScript: DEFAULT_SCRIPT,
 };
 
 const state = {
@@ -889,6 +955,58 @@ function savedWeek() {
   return state.weeks.find(w => w.date === state.currentWeekDate) || null;
 }
 
+const ENGLISH_NUMBERS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six',
+  'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+
+function englishNumber(n) {
+  return ENGLISH_NUMBERS[n] || String(n);
+}
+
+/** Fills the script's placeholders from the week currently on screen. */
+function renderScriptText() {
+  const saved = savedWeek();
+  const names = saved ? saved.candidateIds.map(id => kidById(id).name) : [];
+  const template = state.settings.ceremonyScript ?? DEFAULT_SCRIPT;
+
+  return template
+    .replace(/\{후보수\}/g, names.length)
+    .replace(/\{후보수영문\}/g, englishNumber(names.length))
+    .replace(/\{후보명단\}/g, names.join(', '))
+    .replace(/\{선정인원\}/g, state.winnerCount)
+    .replace(/\{선정인원영문\}/g, englishNumber(state.winnerCount))
+    .replace(/\{날짜\}/g, state.currentWeekDate);
+}
+
+function renderScriptPanel() {
+  document.getElementById('script-view').textContent = renderScriptText();
+}
+
+function openScriptEditor() {
+  document.getElementById('script-input').value =
+    state.settings.ceremonyScript ?? DEFAULT_SCRIPT;
+  document.getElementById('script-view').classList.add('hidden');
+  document.getElementById('script-editor').classList.remove('hidden');
+  document.getElementById('script-edit-btn').classList.add('hidden');
+}
+
+function closeScriptEditor() {
+  document.getElementById('script-view').classList.remove('hidden');
+  document.getElementById('script-editor').classList.add('hidden');
+  document.getElementById('script-edit-btn').classList.remove('hidden');
+}
+
+async function saveScript() {
+  await dbPut('settings', { key: 'ceremonyScript', value: document.getElementById('script-input').value });
+  await loadAll();
+  closeScriptEditor();
+  renderScriptPanel();
+  showToast('진행 멘트를 저장했습니다.');
+}
+
+function resetScript() {
+  document.getElementById('script-input').value = DEFAULT_SCRIPT;
+}
+
 /** 이번주 선정 tab — score the saved candidates and choose the winners. */
 function renderWeekTab() {
   if (!state.currentWeekDate) loadWeekForDate(todayStr());
@@ -907,6 +1025,7 @@ function renderWeekTab() {
     badge.textContent = '후보 미등록';
     badge.className = 'badge mode-new';
   }
+  renderScriptPanel();
   renderCandidateScoreTable();
 }
 
@@ -1084,6 +1203,7 @@ function renderRuleSummary() {
 function stepWinnerCount(delta) {
   state.winnerCount = Math.max(1, state.winnerCount + delta);
   document.getElementById('winner-count-display').textContent = state.winnerCount;
+  renderScriptPanel();  // the script quotes this number
 }
 
 function autoSelectWinners() {
@@ -1869,6 +1989,10 @@ document.getElementById('cand-save-btn').addEventListener('click', saveCandidate
 document.getElementById('cand-delete-btn').addEventListener('click', deleteWeek);
 document.getElementById('week-save-btn').addEventListener('click', saveWeek);
 document.getElementById('auto-select-btn').addEventListener('click', autoSelectWinners);
+document.getElementById('script-edit-btn').addEventListener('click', openScriptEditor);
+document.getElementById('script-cancel-btn').addEventListener('click', closeScriptEditor);
+document.getElementById('script-save-btn').addEventListener('click', saveScript);
+document.getElementById('script-reset-btn').addEventListener('click', resetScript);
 
 document.getElementById('kids-search').addEventListener('input', renderKidsTab);
 document.getElementById('kids-sort-mode').addEventListener('change', e => {
