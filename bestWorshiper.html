@@ -545,6 +545,7 @@ select:focus { outline: none; border-color: var(--accent); }
     <div class="week-actions">
       <button id="week-save-btn" class="btn accent">선정 저장</button>
       <button id="ceremony-btn" class="btn">🎉 시상식 시작</button>
+      <button id="pptx-btn" class="btn">📊 PPT 내보내기</button>
     </div>
   </section>
 
@@ -717,7 +718,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2031,6 +2032,434 @@ async function resetAllData() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// PPTX EXPORT
+//
+// A .pptx is a zip of XML parts, so the deck is written here directly
+// rather than pulling in a library — the app stays dependency-free and
+// keeps working offline.
+// ═══════════════════════════════════════════════════════════
+const EMU_PER_INCH = 914400;
+const DECK_W = 20 * EMU_PER_INCH;      // matches the EM Service template,
+const DECK_H = 11.25 * EMU_PER_INCH;   // so slides can be inserted unscaled
+
+const inEmu = inches => Math.round(inches * EMU_PER_INCH);
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/** Zip writer, stored (uncompressed): the XML is small and photos are already compressed. */
+function zipStore(files) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+
+  for (const f of files) {
+    const name = enc.encode(f.name);
+    const data = f.data;
+    const crc = crc32(data);
+
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint16(6, 0x0800, true);   // UTF-8 names
+    local.setUint16(8, 0, true);        // stored
+    local.setUint16(10, 0, true);
+    local.setUint16(12, 0x21, true);    // 1980-01-01
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    local.setUint16(28, 0, true);
+    parts.push(new Uint8Array(local.buffer), name, data);
+
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true);
+    cd.setUint16(4, 20, true);
+    cd.setUint16(6, 20, true);
+    cd.setUint16(8, 0x0800, true);
+    cd.setUint16(10, 0, true);
+    cd.setUint16(12, 0, true);
+    cd.setUint16(14, 0x21, true);
+    cd.setUint32(16, crc, true);
+    cd.setUint32(20, data.length, true);
+    cd.setUint32(24, data.length, true);
+    cd.setUint16(28, name.length, true);
+    cd.setUint32(38, 0, true);
+    cd.setUint32(42, offset, true);
+    central.push(new Uint8Array(cd.buffer), name);
+
+    offset += 30 + name.length + data.length;
+  }
+
+  const centralSize = central.reduce((s, c) => s + c.length, 0);
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true);
+  eocd.setUint16(8, files.length, true);
+  eocd.setUint16(10, files.length, true);
+  eocd.setUint32(12, centralSize, true);
+  eocd.setUint32(16, offset, true);
+
+  const all = [...parts, ...central, new Uint8Array(eocd.buffer)];
+  const total = all.reduce((s, c) => s + c.length, 0);
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const c of all) { out.set(c, p); p += c.length; }
+  return out;
+}
+
+function xmlEscape(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+}
+
+const utf8 = s => new TextEncoder().encode(s);
+const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+  'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+
+let shapeSeq = 1;
+const emptyGroup = () =>
+  '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
+  '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>' +
+  '<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
+
+function pptShape({ x, y, w, h, fill, geom = 'rect' }) {
+  const id = ++shapeSeq;
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="s${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
+    `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom>` +
+    `<a:solidFill><a:srgbClr val="${fill}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>` +
+    `<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
+}
+
+function pptText({ x, y, w, h, lines, size, color, bold = false, align = 'ctr', font = 'Segoe UI' }) {
+  const id = ++shapeSeq;
+  const paras = (Array.isArray(lines) ? lines : [lines]).map(line =>
+    `<a:p><a:pPr algn="${align}"/><a:r>` +
+    `<a:rPr lang="ko-KR" altLang="en-US" sz="${Math.round(size * 100)}" b="${bold ? 1 : 0}" dirty="0">` +
+    `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>` +
+    `<a:latin typeface="${font}"/><a:ea typeface="Malgun Gothic"/><a:cs typeface="${font}"/></a:rPr>` +
+    `<a:t>${xmlEscape(line)}</a:t></a:r></a:p>`).join('');
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="t${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>` +
+    `<p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
+}
+
+function pptPicture({ x, y, w, h, rId }) {
+  const id = ++shapeSeq;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="pic${id}"/>` +
+    `<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>` +
+    `<p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
+    `<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+}
+
+const slideXml = shapes => XML_HEAD +
+  `<p:sld ${NS}><p:cSld><p:spTree>${emptyGroup()}${shapes.join('')}</p:spTree></p:cSld>` +
+  `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+
+/**
+ * Normalises a kid's photo to a centred square JPEG. Phone photos are large and
+ * may be portrait or video; this keeps the deck small and the faces centred.
+ */
+async function photoForSlide(kid, size = 900) {
+  if (!kid.media) return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    let src, sw, sh;
+
+    if (kid.mediaType === 'video') {
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.src = URL.createObjectURL(kid.media);
+      await new Promise((res, rej) => {
+        video.onloadeddata = res;
+        video.onerror = rej;
+        setTimeout(rej, 5000);
+      });
+      try { video.currentTime = Math.min(0.1, video.duration || 0.1); } catch (e) {}
+      await new Promise(res => { video.onseeked = res; setTimeout(res, 600); });
+      src = video; sw = video.videoWidth; sh = video.videoHeight;
+    } else {
+      src = await createImageBitmap(kid.media);
+      sw = src.width; sh = src.height;
+    }
+    if (!sw || !sh) return null;
+
+    const side = Math.min(sw, sh);
+    ctx.drawImage(src, (sw - side) / 2, (sh - side) / 2, side, side, 0, 0, size, size);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    return new Uint8Array(await blob.arrayBuffer());
+  } catch (e) {
+    console.warn('photo skipped for', kid.name, e);
+    return null;
+  }
+}
+
+async function buildAwardPptx() {
+  const saved = savedWeek();
+  const winners = saved.winnerIds.map(id => kidById(id));
+  const nominees = saved.candidateIds.map(id => kidById(id).name);
+  const when = state.currentWeekDate;
+
+  const photos = [];   // {name, data}
+  const slides = [];   // {xml, imageRel}
+
+  const BG = '0D0F14', GOLD = 'FFD740', ACCENT = '6C63FF', TEXT = 'E8EAF6', DIM = '8A8D9E';
+  const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
+
+  // 1. Title
+  slides.push({ xml: [
+    bg(),
+    pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
+    pptText({ x: 0, y: inEmu(4.2), w: DECK_W, h: inEmu(1.8), lines: 'Best Worshiper', size: 96, color: GOLD, bold: true }),
+    pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.0), lines: when, size: 40, color: DIM }),
+    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: `오늘의 주인공 ${winners.length}명을 만나볼까요?`, size: 40, color: TEXT }),
+  ] });
+
+  // 2. Nominees
+  if (nominees.length) {
+    const cols = nominees.length <= 8 ? 2 : (nominees.length <= 15 ? 3 : 4);
+    const rows = Math.ceil(nominees.length / cols);
+    const colW = (DECK_W - inEmu(2)) / cols;
+    const rowH = Math.min(inEmu(1.1), (DECK_H - inEmu(3.4)) / Math.max(rows, 1));
+    const shapes = [bg(), pptText({ x: 0, y: inEmu(0.9), w: DECK_W, h: inEmu(1.2),
+      lines: `Today's Nominees · ${nominees.length}명`, size: 54, color: ACCENT, bold: true })];
+    nominees.forEach((name, i) => {
+      shapes.push(pptText({
+        x: Math.round(inEmu(1) + colW * Math.floor(i / rows)),
+        y: Math.round(inEmu(2.6) + rowH * (i % rows)),
+        w: Math.round(colW), h: Math.round(rowH),
+        lines: `· ${name}`, size: nominees.length > 15 ? 40 : 48, color: TEXT,
+      }));
+    });
+    slides.push({ xml: shapes });
+  }
+
+  // 3. A drumroll and a reveal for each winner
+  for (let i = 0; i < winners.length; i++) {
+    const kid = winners[i];
+    const label = `Best Worshiper  ${i + 1} / ${winners.length}`;
+
+    slides.push({ xml: [
+      bg(),
+      pptText({ x: 0, y: inEmu(1.5), w: DECK_W, h: inEmu(1.2), lines: label, size: 52, color: ACCENT, bold: true }),
+      pptText({ x: 0, y: inEmu(3.4), w: DECK_W, h: inEmu(2.4), lines: '🥁', size: 170, color: TEXT }),
+      pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.6), lines: '두구두구두구...', size: 96, color: GOLD, bold: true }),
+      pptText({ x: 0, y: inEmu(8.6), w: DECK_W, h: inEmu(1.0), lines: '과연 누구일까요?', size: 40, color: DIM }),
+    ] });
+
+    const jpeg = await photoForSlide(kid);
+    const box = inEmu(6), px = inEmu(2.2), py = inEmu(2.6);
+    const shapes = [
+      bg(),
+      pptText({ x: 0, y: inEmu(0.7), w: DECK_W, h: inEmu(0.9), lines: label, size: 34, color: DIM }),
+      pptShape({ x: px - inEmu(0.18), y: py - inEmu(0.18), w: box + inEmu(0.36), h: box + inEmu(0.36), fill: GOLD, geom: 'ellipse' }),
+    ];
+
+    let imageRel = null;
+    if (jpeg) {
+      const name = `image${photos.length + 1}.jpeg`;
+      photos.push({ name, data: jpeg });
+      imageRel = name;
+      shapes.push(pptPicture({ x: px, y: py, w: box, h: box, rId: 'rId2' }));
+    } else {
+      shapes.push(pptShape({ x: px, y: py, w: box, h: box, fill: '1C1F2A', geom: 'ellipse' }));
+      shapes.push(pptText({ x: px, y: py, w: box, h: box, lines: '🧒', size: 190, color: TEXT }));
+    }
+
+    const rx = px + box + inEmu(1.4);
+    const rw = DECK_W - rx - inEmu(1.2);
+    shapes.push(pptText({ x: rx, y: inEmu(3.6), w: rw, h: inEmu(1.2), lines: '🏆  축하합니다!', size: 48, color: GOLD, bold: true, align: 'l' }));
+    shapes.push(pptText({ x: rx, y: inEmu(5.0), w: rw, h: inEmu(2.2), lines: kid.name, size: 130, color: TEXT, bold: true, align: 'l' }));
+    slides.push({ xml: shapes, imageRel });
+  }
+
+  // 4. Finale
+  const nameSize = winners.length <= 4 ? 80 : (winners.length <= 6 ? 64 : 48);
+  slides.push({ xml: [
+    bg(),
+    pptText({ x: 0, y: inEmu(1.2), w: DECK_W, h: inEmu(1.6), lines: 'Congratulations!', size: 84, color: GOLD, bold: true }),
+    pptText({ x: 0, y: inEmu(3.0), w: DECK_W, h: inEmu(1.0), lines: "Today's Best Worshipers", size: 40, color: DIM }),
+    pptText({ x: inEmu(1), y: inEmu(4.3), w: DECK_W - inEmu(2), h: inEmu(4.0), lines: winners.map(k => k.name), size: nameSize, color: TEXT, bold: true }),
+    pptText({ x: 0, y: inEmu(9.4), w: DECK_W, h: inEmu(1.0), lines: '다음 주에도 기대할게요 🙌', size: 40, color: ACCENT }),
+  ] });
+
+  return zipStore(pptxParts(slides, photos));
+}
+
+/** Assembles the OOXML package around the generated slides. */
+function pptxParts(slides, photos) {
+  const rel = (id, type, target) =>
+    `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
+  const RELS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"';
+
+  const files = [];
+
+  files.push({ name: '[Content_Types].xml', data: utf8(XML_HEAD +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Default Extension="jpeg" ContentType="image/jpeg"/>' +
+    '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' +
+    '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
+    '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
+    '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
+    slides.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('') +
+    '</Types>') });
+
+  files.push({ name: '_rels/.rels', data: utf8(XML_HEAD +
+    `<Relationships ${RELS}>` +
+    rel('rId1', 'officeDocument', 'ppt/presentation.xml') + '</Relationships>') });
+
+  const sldIds = slides.map((_, i) =>
+    `<p:sldId id="${256 + i}" r:id="rId${i + 2}"/>`).join('');
+  files.push({ name: 'ppt/presentation.xml', data: utf8(XML_HEAD +
+    `<p:presentation ${NS} saveSubsetFonts="1">` +
+    '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
+    `<p:sldIdLst>${sldIds}</p:sldIdLst>` +
+    `<p:sldSz cx="${DECK_W}" cy="${DECK_H}"/><p:notesSz cx="${DECK_H}" cy="${DECK_W}"/>` +
+    '</p:presentation>') });
+
+  files.push({ name: 'ppt/_rels/presentation.xml.rels', data: utf8(XML_HEAD +
+    `<Relationships ${RELS}>` +
+    rel('rId1', 'slideMaster', 'slideMasters/slideMaster1.xml') +
+    slides.map((_, i) => rel(`rId${i + 2}`, 'slide', `slides/slide${i + 1}.xml`)).join('') +
+    rel(`rId${slides.length + 2}`, 'theme', 'theme/theme1.xml') +
+    '</Relationships>') });
+
+  files.push({ name: 'ppt/slideMasters/slideMaster1.xml', data: utf8(XML_HEAD +
+    `<p:sldMaster ${NS}><p:cSld>` +
+    '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="0D0F14"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>' +
+    `<p:spTree>${emptyGroup()}</p:spTree></p:cSld>` +
+    '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' +
+    '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>' +
+    '<p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>') });
+
+  files.push({ name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: utf8(XML_HEAD +
+    `<Relationships ${RELS}>` +
+    rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') +
+    rel('rId2', 'theme', '../theme/theme1.xml') + '</Relationships>') });
+
+  files.push({ name: 'ppt/slideLayouts/slideLayout1.xml', data: utf8(XML_HEAD +
+    `<p:sldLayout ${NS} type="blank" preserve="1">` +
+    `<p:cSld name="Blank"><p:spTree>${emptyGroup()}</p:spTree></p:cSld>` +
+    '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>') });
+
+  files.push({ name: 'ppt/slideLayouts/_rels/slideLayout1.xml.rels', data: utf8(XML_HEAD +
+    `<Relationships ${RELS}>` +
+    rel('rId1', 'slideMaster', '../slideMasters/slideMaster1.xml') + '</Relationships>') });
+
+  files.push({ name: 'ppt/theme/theme1.xml', data: utf8(themeXml()) });
+
+  slides.forEach((s, i) => {
+    files.push({ name: `ppt/slides/slide${i + 1}.xml`, data: utf8(slideXml(s.xml)) });
+    files.push({ name: `ppt/slides/_rels/slide${i + 1}.xml.rels`, data: utf8(XML_HEAD +
+      `<Relationships ${RELS}>` +
+      rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') +
+      (s.imageRel ? rel('rId2', 'image', `../media/${s.imageRel}`) : '') +
+      '</Relationships>') });
+  });
+
+  photos.forEach(p => files.push({ name: `ppt/media/${p.name}`, data: p.data }));
+  return files;
+}
+
+function themeXml() {
+  const fill = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
+  const line = '<a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln>';
+  const font = tag => `<a:${tag}><a:latin typeface="Segoe UI"/><a:ea typeface="Malgun Gothic"/><a:cs typeface=""/></a:${tag}>`;
+
+  return XML_HEAD +
+    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="bestWorshiper">' +
+    '<a:themeElements>' +
+    '<a:clrScheme name="bestWorshiper">' +
+    '<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>' +
+    '<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' +
+    '<a:dk2><a:srgbClr val="0D0F14"/></a:dk2><a:lt2><a:srgbClr val="E8EAF6"/></a:lt2>' +
+    '<a:accent1><a:srgbClr val="6C63FF"/></a:accent1><a:accent2><a:srgbClr val="FFD740"/></a:accent2>' +
+    '<a:accent3><a:srgbClr val="00C853"/></a:accent3><a:accent4><a:srgbClr val="FF5252"/></a:accent4>' +
+    '<a:accent5><a:srgbClr val="40C4FF"/></a:accent5><a:accent6><a:srgbClr val="B0BEC5"/></a:accent6>' +
+    '<a:hlink><a:srgbClr val="6C63FF"/></a:hlink><a:folHlink><a:srgbClr val="B0BEC5"/></a:folHlink>' +
+    '</a:clrScheme>' +
+    `<a:fontScheme name="bestWorshiper">${font('majorFont')}${font('minorFont')}</a:fontScheme>` +
+    '<a:fmtScheme name="bestWorshiper">' +
+    `<a:fillStyleLst>${fill}${fill}${fill}</a:fillStyleLst>` +
+    `<a:lnStyleLst>${line}${line}${line}</a:lnStyleLst>` +
+    '<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>' +
+    `<a:bgFillStyleLst>${fill}${fill}${fill}</a:bgFillStyleLst>` +
+    '</a:fmtScheme></a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>';
+}
+
+function base64FromBytes(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/** Same routing as the text exports: native bridge in the app, blob in a browser. */
+function saveBinaryToDevice(fileName, bytes, mimeType) {
+  if (window.AndroidBridge && typeof window.AndroidBridge.saveFile === 'function') {
+    window.AndroidBridge.saveFile(fileName, base64FromBytes(bytes), mimeType);
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('PPT를 저장했습니다.');
+}
+
+async function exportAwardPptx() {
+  const saved = savedWeek();
+  if (!saved || saved.winnerIds.length === 0) {
+    showToast('먼저 Best Worshiper를 선정하고 저장해주세요.');
+    return;
+  }
+  const btn = document.getElementById('pptx-btn');
+  btn.disabled = true;
+  btn.textContent = '만드는 중...';
+  try {
+    const bytes = await buildAwardPptx();
+    const stamp = state.currentWeekDate.replace(/-/g, '');
+    saveBinaryToDevice(`BestWorshiper_${stamp}.pptx`, bytes,
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+  } catch (e) {
+    console.error(e);
+    showToast('PPT 생성에 실패했습니다: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 PPT 내보내기';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // AWARD CEREMONY
 // ═══════════════════════════════════════════════════════════
 const ceremony = {
@@ -2286,6 +2715,7 @@ document.getElementById('script-save-btn').addEventListener('click', saveScript)
 document.getElementById('script-reset-btn').addEventListener('click', resetScript);
 
 document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
+document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
 document.getElementById('ceremony').addEventListener('click', e => {
   // The top bar owns its own buttons; anywhere else advances the ceremony.
   if (e.target.closest('.ceremony-top')) return;
