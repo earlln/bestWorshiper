@@ -355,6 +355,95 @@ select:focus { outline: none; border-color: var(--accent); }
 .lightbox-box { width: auto; max-width: 90vw; text-align: center; }
 .lightbox-box img, .lightbox-box video { max-width: 85vw; max-height: 80vh; border-radius: 8px; }
 
+/* ── Award ceremony (full screen, one tap per beat) ── */
+.ceremony {
+  position: fixed; inset: 0; z-index: 400;
+  background: radial-gradient(circle at 50% 35%, #1a1d2b 0%, #0d0f14 70%);
+  display: flex; flex-direction: column;
+  user-select: none; -webkit-user-select: none;
+  overflow: hidden;
+}
+.ceremony-top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 14px 16px; position: relative; z-index: 3;
+}
+.ceremony-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+  color: var(--text); font-size: 16px; cursor: pointer; flex-shrink: 0;
+}
+.ceremony-dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.ceremony-dots i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.18); display: block;
+}
+.ceremony-dots i.done { background: var(--gold); }
+.ceremony-dots i.now { background: var(--accent); transform: scale(1.4); }
+
+.ceremony-stage {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 10px 20px; position: relative; z-index: 2;
+}
+.ceremony-hint {
+  padding: 16px; text-align: center;
+  font-size: 13px; color: var(--text-dim);
+  animation: hintPulse 2s ease-in-out infinite;
+  position: relative; z-index: 3;
+}
+@keyframes hintPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
+
+.cm-kicker { font-size: 15px; letter-spacing: 3px; color: var(--accent); font-weight: 700; margin-bottom: 14px; }
+.cm-big { font-size: clamp(34px, 11vw, 92px); font-weight: 800; color: var(--gold); line-height: 1.15; }
+.cm-sub { font-size: clamp(15px, 4.5vw, 26px); color: var(--text); margin-top: 14px; }
+.cm-dim { font-size: 13px; color: var(--text-dim); margin-top: 10px; }
+.cm-emoji { font-size: clamp(64px, 22vw, 150px); line-height: 1; }
+
+/* Drumroll: the trophy shakes while the tension builds */
+.cm-shake { animation: shake 0.22s linear infinite; }
+@keyframes shake {
+  0%,100% { transform: translate(0,0) rotate(0); }
+  25% { transform: translate(-5px,2px) rotate(-6deg); }
+  75% { transform: translate(5px,-2px) rotate(6deg); }
+}
+.cm-name {
+  font-size: clamp(40px, 15vw, 120px); font-weight: 800;
+  color: var(--text); margin-top: 18px; word-break: keep-all;
+  animation: popIn 0.5s cubic-bezier(0.2,1.4,0.4,1) both;
+}
+@keyframes popIn { from { opacity:0; transform: scale(0.5); } to { opacity:1; transform: scale(1); } }
+
+.cm-photo {
+  width: min(62vw, 46vh); height: min(62vw, 46vh);
+  flex-shrink: 0;  /* keep the portrait circular on short/landscape screens */
+  border-radius: 50%; overflow: hidden;
+  border: 6px solid var(--gold);
+  box-shadow: 0 0 60px rgba(255,215,64,0.45);
+  background: #1c1f2a;
+  display: flex; align-items: center; justify-content: center;
+  font-size: min(30vw, 22vh);
+  animation: popIn 0.55s cubic-bezier(0.2,1.4,0.4,1) both;
+}
+.cm-photo img, .cm-photo video { width: 100%; height: 100%; object-fit: cover; }
+
+.cm-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; }
+.cm-list span {
+  background: rgba(255,215,64,0.12); border: 1px solid rgba(255,215,64,0.5);
+  color: var(--gold); border-radius: 30px; padding: 8px 16px;
+  font-size: clamp(14px, 4vw, 22px); font-weight: 700;
+}
+
+/* Confetti on reveal */
+.confetti { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+.confetti i {
+  position: absolute; top: -6vh; width: 9px; height: 15px; opacity: 0;
+  animation: fall linear forwards;
+}
+@keyframes fall {
+  0% { opacity: 1; transform: translateY(-10vh) rotate(0); }
+  100% { opacity: 0.9; transform: translateY(110vh) rotate(720deg); }
+}
+
 #toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   background: rgba(30,33,44,0.95); border: 1px solid var(--border);
@@ -455,6 +544,7 @@ select:focus { outline: none; border-color: var(--accent); }
     </div>
     <div class="week-actions">
       <button id="week-save-btn" class="btn accent">선정 저장</button>
+      <button id="ceremony-btn" class="btn">🎉 시상식 시작</button>
     </div>
   </section>
 
@@ -610,13 +700,24 @@ select:focus { outline: none; border-color: var(--accent); }
   </div>
 </div>
 
+<div id="ceremony" class="ceremony hidden">
+  <div class="ceremony-top">
+    <button id="ceremony-sound" class="ceremony-icon" title="소리">🔊</button>
+    <div id="ceremony-dots" class="ceremony-dots"></div>
+    <button id="ceremony-close" class="ceremony-icon" title="닫기">✕</button>
+  </div>
+  <div id="ceremony-stage" class="ceremony-stage"></div>
+  <div id="ceremony-hint" class="ceremony-hint">화면을 탭하세요</div>
+  <div id="ceremony-confetti" class="confetti"></div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1930,6 +2031,196 @@ async function resetAllData() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// AWARD CEREMONY
+// ═══════════════════════════════════════════════════════════
+const ceremony = {
+  winners: [],   // kid records, in reveal order
+  step: 0,       // 0 = intro, then suspense/reveal pairs, last = finale
+  sound: true,
+  audio: null,
+  drumStop: null,
+};
+
+/** Steps run: intro, then two per winner, then the finale. */
+function ceremonySteps() { return 2 + ceremony.winners.length * 2; }
+
+function openCeremony() {
+  const saved = savedWeek();
+  if (!saved || saved.winnerIds.length === 0) {
+    showToast('먼저 Best Worshiper를 선정하고 저장해주세요.');
+    return;
+  }
+  ceremony.winners = saved.winnerIds.map(id => kidById(id));
+  ceremony.step = 0;
+  document.getElementById('ceremony').classList.remove('hidden');
+  renderCeremony();
+}
+
+function closeCeremony() {
+  stopDrum();
+  document.getElementById('ceremony').classList.add('hidden');
+  document.getElementById('ceremony-confetti').innerHTML = '';
+}
+
+function advanceCeremony() {
+  if (ceremony.step >= ceremonySteps() - 1) { closeCeremony(); return; }
+  ceremony.step++;
+  renderCeremony();
+}
+
+function renderCeremony() {
+  const stage = document.getElementById('ceremony-stage');
+  const hint = document.getElementById('ceremony-hint');
+  const total = ceremony.winners.length;
+  const step = ceremony.step;
+  stopDrum();
+  document.getElementById('ceremony-confetti').innerHTML = '';
+
+  if (step === 0) {
+    stage.innerHTML = `
+      <div class="cm-emoji">🏆</div>
+      <div class="cm-big">Best Worshiper</div>
+      <div class="cm-sub">${state.currentWeekDate}</div>
+      <div class="cm-sub">오늘의 주인공 ${total}명을 만나볼까요?</div>`;
+    hint.textContent = '화면을 탭하면 시작합니다';
+  } else if (step === ceremonySteps() - 1) {
+    stage.innerHTML = `
+      <div class="cm-kicker">CONGRATULATIONS</div>
+      <div class="cm-big">축하합니다!</div>
+      <div class="cm-list">${ceremony.winners.map(k => `<span>${escapeHtml(k.name)}</span>`).join('')}</div>
+      <div class="cm-dim">다음 주에도 기대할게요 🙌</div>`;
+    hint.textContent = '탭하면 닫힙니다';
+    burstConfetti(70);
+    playFanfare();
+  } else {
+    const index = Math.floor((step - 1) / 2);
+    const isReveal = (step - 1) % 2 === 1;
+    const kid = ceremony.winners[index];
+
+    if (!isReveal) {
+      stage.innerHTML = `
+        <div class="cm-kicker">BEST WORSHIPER ${index + 1} / ${total}</div>
+        <div class="cm-emoji cm-shake">🥁</div>
+        <div class="cm-big">두구두구두구...</div>
+        <div class="cm-dim">과연 누구일까요?</div>`;
+      hint.textContent = '탭하면 공개됩니다';
+      startDrum();
+    } else {
+      stage.innerHTML = `
+        <div class="cm-kicker">BEST WORSHIPER ${index + 1} / ${total}</div>
+        <div class="cm-photo">${ceremonyPhotoHTML(kid)}</div>
+        <div class="cm-name">${escapeHtml(kid.name)}</div>`;
+      hint.textContent = index + 1 < total ? '탭하면 다음 주인공' : '탭하면 마무리';
+      burstConfetti(45);
+      playFanfare();
+    }
+  }
+  renderCeremonyDots();
+}
+
+function ceremonyPhotoHTML(kid) {
+  const url = mediaURL(kid);
+  if (!url) return '🧒';
+  return kid.mediaType === 'video'
+    ? `<video src="${url}" autoplay muted loop playsinline></video>`
+    : `<img src="${url}" alt="">`;
+}
+
+function renderCeremonyDots() {
+  const total = ceremony.winners.length;
+  const current = ceremony.step === 0 ? -1 : Math.floor((ceremony.step - 1) / 2);
+  const done = ceremony.step >= ceremonySteps() - 1;
+  document.getElementById('ceremony-dots').innerHTML = ceremony.winners
+    .map((_, i) => `<i class="${done || i < current ? 'done' : (i === current ? 'now' : '')}"></i>`)
+    .join('');
+}
+
+function burstConfetti(count) {
+  const colors = ['#ffd740', '#6c63ff', '#00c853', '#ff5252', '#40c4ff'];
+  const box = document.getElementById('ceremony-confetti');
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.6;
+    const dur = 1.8 + Math.random() * 1.6;
+    const color = colors[i % colors.length];
+    html += `<i style="left:${left}%;background:${color};animation-duration:${dur}s;animation-delay:${delay}s"></i>`;
+  }
+  box.innerHTML = html;
+}
+
+// ── Sound. Synthesised so the app keeps working offline with no audio files ──
+function audioCtx() {
+  if (!ceremony.audio) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    ceremony.audio = new Ctx();
+  }
+  if (ceremony.audio.state === 'suspended') ceremony.audio.resume();
+  return ceremony.audio;
+}
+
+function startDrum() {
+  if (!ceremony.sound) return;
+  const ctx = audioCtx();
+  if (!ctx) return;
+  let stopped = false;
+  ceremony.drumStop = () => { stopped = true; };
+
+  const hit = () => {
+    if (stopped) return;
+    const dur = 0.06;
+    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.22;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start();
+    setTimeout(hit, 55 + Math.random() * 25);
+  };
+  hit();
+}
+
+function stopDrum() {
+  if (ceremony.drumStop) { ceremony.drumStop(); ceremony.drumStop = null; }
+}
+
+function playFanfare() {
+  if (!ceremony.sound) return;
+  const ctx = audioCtx();
+  if (!ctx) return;
+  // A simple major triad walk-up — celebratory without needing a sample.
+  [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const at = ctx.currentTime + i * 0.11;
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(0.18, at + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, at + 0.65);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + 0.7);
+  });
+}
+
+function toggleCeremonySound() {
+  ceremony.sound = !ceremony.sound;
+  document.getElementById('ceremony-sound').textContent = ceremony.sound ? '🔊' : '🔇';
+  if (!ceremony.sound) stopDrum();
+  else if (document.getElementById('ceremony-hint').textContent.includes('공개')) startDrum();
+}
+
+// ═══════════════════════════════════════════════════════════
 // LIGHTBOX
 // ═══════════════════════════════════════════════════════════
 function openLightbox(kidId) {
@@ -1993,6 +2284,20 @@ document.getElementById('script-edit-btn').addEventListener('click', openScriptE
 document.getElementById('script-cancel-btn').addEventListener('click', closeScriptEditor);
 document.getElementById('script-save-btn').addEventListener('click', saveScript);
 document.getElementById('script-reset-btn').addEventListener('click', resetScript);
+
+document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
+document.getElementById('ceremony').addEventListener('click', e => {
+  // The top bar owns its own buttons; anywhere else advances the ceremony.
+  if (e.target.closest('.ceremony-top')) return;
+  advanceCeremony();
+});
+document.getElementById('ceremony-close').addEventListener('click', closeCeremony);
+document.getElementById('ceremony-sound').addEventListener('click', toggleCeremonySound);
+document.addEventListener('keydown', e => {
+  if (document.getElementById('ceremony').classList.contains('hidden')) return;
+  if (e.key === 'Escape') { closeCeremony(); e.preventDefault(); }
+  else if ([' ', 'Enter', 'ArrowRight', 'PageDown'].includes(e.key)) { advanceCeremony(); e.preventDefault(); }
+});
 
 document.getElementById('kids-search').addEventListener('input', renderKidsTab);
 document.getElementById('kids-sort-mode').addEventListener('change', e => {
