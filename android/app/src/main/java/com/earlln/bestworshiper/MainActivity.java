@@ -3,6 +3,8 @@ package com.earlln.bestworshiper;
 import android.app.DownloadManager;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -24,9 +26,11 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
+import androidx.documentfile.provider.DocumentFile;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 
 /**
@@ -49,6 +53,10 @@ public class MainActivity extends AppCompatActivity {
     /** Where the camera app is writing; also what we hand back on success. */
     private Uri pendingCaptureUri;
 
+    private static final String PREFS = "bestWorshiper";
+    private static final String KEY_DEST = "destTreeUri";
+    private ActivityResultLauncher<Uri> pickFolderLauncher;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,6 +72,22 @@ public class MainActivity extends AppCompatActivity {
         takeVideoLauncher = registerForActivityResult(
                 new ActivityResultContracts.CaptureVideo(),
                 ok -> deliverToWeb(Boolean.TRUE.equals(ok) ? pendingCaptureUri : null));
+
+        // Remembering the destination folder means later exports file themselves
+        // away without the user steering a share sheet every week.
+        pickFolderLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocumentTree(),
+                uri -> {
+                    if (uri == null) { notifyWeb('"' + "destCancelled" + '"'); return; }
+                    try {
+                        getContentResolver().takePersistableUriPermission(uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    } catch (Exception e) { /* some providers grant only for this session */ }
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                            .putString(KEY_DEST, uri.toString()).apply();
+                    toast("저장 위치를 설정했습니다: " + describeTree(uri));
+                    notifyWeb(jsonString(describeTree(uri)));
+                });
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -162,6 +186,26 @@ public class MainActivity extends AppCompatActivity {
         pendingCaptureUri = null;
     }
 
+    /** Tells the page how a folder pick turned out. */
+    private void notifyWeb(String jsonArg) {
+        runOnUiThread(() -> webView.evaluateJavascript(
+                "window.onDestinationPicked && window.onDestinationPicked(" + jsonArg + ")", null));
+    }
+
+    private static String jsonString(String s) {
+        return '"' + s.replace("\\", "\\\\").replace("\"", "\\\"") + '"';
+    }
+
+    private String describeTree(Uri tree) {
+        DocumentFile dir = DocumentFile.fromTreeUri(this, tree);
+        String name = dir != null ? dir.getName() : null;
+        return name != null ? name : tree.getLastPathSegment();
+    }
+
+    private void toast(final String msg) {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show());
+    }
+
     /** Opens the camera, writing into a file this app can share back. */
     private boolean launchCamera(boolean video) {
         try {
@@ -232,8 +276,98 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        /** Asks the user which folder exports should land in (e.g. OneDrive/EM). */
+        @JavascriptInterface
+        public void pickDestination() {
+            runOnUiThread(() -> {
+                try {
+                    pickFolderLauncher.launch(null);
+                } catch (Exception e) {
+                    toast("폴더 선택을 열 수 없습니다: " + e.getMessage());
+                }
+            });
+        }
+
+        /** The chosen folder's display name, or "" when none is set yet. */
+        @JavascriptInterface
+        public String destinationName() {
+            String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
+            if (saved == null) return "";
+            try { return describeTree(Uri.parse(saved)); } catch (Exception e) { return ""; }
+        }
+
+        @JavascriptInterface
+        public void clearDestination() {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_DEST).apply();
+            toast("저장 위치를 해제했습니다.");
+        }
+
+        /**
+         * Writes into the chosen folder, creating subPath ("2026/20260920") along
+         * the way. Returns "" on success or a reason, so the page can fall back to
+         * sharing rather than leaving the user with nothing.
+         */
+        @JavascriptInterface
+        public String saveToDestination(String fileName, String base64Data,
+                                        String mimeType, String subPath) {
+            String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
+            if (saved == null) return "no-destination";
+            try {
+                DocumentFile dir = DocumentFile.fromTreeUri(this_(), Uri.parse(saved));
+                if (dir == null || !dir.canWrite()) return "not-writable";
+
+                for (String part : subPath.split("/")) {
+                    if (part.isEmpty()) continue;
+                    DocumentFile next = dir.findFile(part);
+                    if (next == null || !next.isDirectory()) next = dir.createDirectory(part);
+                    if (next == null) return "mkdir-failed:" + part;
+                    dir = next;
+                }
+
+                DocumentFile existing = dir.findFile(fileName);
+                if (existing != null) existing.delete();   // overwrite this week's file
+                DocumentFile file = dir.createFile(mimeType, fileName);
+                if (file == null) return "create-failed";
+
+                byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
+                try (OutputStream out = getContentResolver().openOutputStream(file.getUri())) {
+                    if (out == null) return "stream-failed";
+                    out.write(bytes);
+                }
+                toast(subPath + " 에 저장했습니다: " + fileName);
+                return "";
+            } catch (Exception e) {
+                return "error:" + e.getMessage();
+            }
+        }
+
+        /** Hands the file to the share sheet — the route when no folder is set. */
+        @JavascriptInterface
+        public void shareFile(String fileName, String base64Data, String mimeType) {
+            try {
+                File dir = new File(getCacheDir(), "share");
+                if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("mkdir failed");
+                File target = new File(dir, fileName);
+                try (OutputStream out = new FileOutputStream(target)) {
+                    out.write(Base64.decode(base64Data, Base64.DEFAULT));
+                }
+                Uri uri = FileProvider.getUriForFile(this_(), getPackageName() + ".fileprovider", target);
+
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType(mimeType);
+                send.putExtra(Intent.EXTRA_STREAM, uri);
+                send.putExtra(Intent.EXTRA_SUBJECT, fileName);
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                runOnUiThread(() -> startActivity(Intent.createChooser(send, "PPT 보내기")));
+            } catch (Exception e) {
+                toast("공유 실패: " + e.getMessage());
+            }
+        }
+
+        private MainActivity this_() { return MainActivity.this; }
+
         private void toast(final String msg) {
-            runOnUiThread(() -> Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show());
+            MainActivity.this.toast(msg);
         }
     }
 }

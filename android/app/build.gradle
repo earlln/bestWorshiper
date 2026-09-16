@@ -10,8 +10,8 @@ android {
         applicationId "com.earlln.bestworshiper"
         minSdk 24
         targetSdk 34
-        versionCode 14
-        versionName "1.8.0"
+        versionCode 15
+        versionName "1.9.0"
     }
 
     buildTypes {
@@ -36,6 +36,9 @@ dependencies {
     // FileProvider (androidx.core) arrives transitively via appcompat; declaring
     // it explicitly pulled a newer kotlin-stdlib that clashed with the older
     // split stdlib-jdk7/jdk8 artifacts already on the classpath.
+
+    // Writing exports into a user-chosen folder tree (e.g. OneDrive).
+    implementation 'androidx.documentfile:documentfile:1.0.1'
 }
 
 // Keep the APK's bundled copy of the web app in sync with the repo root,

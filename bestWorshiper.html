@@ -672,6 +672,20 @@ select:focus { outline: none; border-color: var(--accent); }
         <p class="hint"><b>아이폰</b>: Safari로 열기 → 하단 공유 버튼 → "홈 화면에 추가"</p>
         <p class="hint" style="margin-top:4px"><b>안드로이드</b>: Chrome으로 열기 → 오른쪽 위 메뉴(⋮) → "홈 화면에 추가" / "앱 설치"</p>
       </div>
+      <div class="card hidden" id="destination-card">
+        <h3>📁 PPT 저장 위치</h3>
+        <p class="hint">한 번 지정해두면 PPT를 내보낼 때마다 <b>선택한 폴더 / 연도 / 날짜</b> 하위에 자동으로 저장됩니다.<br>
+        예) OneDrive의 <b>EM</b> 폴더를 고르면 → <code>EM/2026/20260920/BestWorshiper_20260920.pptx</code></p>
+        <div class="setting-row">
+          <div class="setting-key">현재 위치</div>
+          <div><b id="destination-name">지정 안 됨</b></div>
+        </div>
+        <div class="row-actions">
+          <button id="destination-pick-btn" class="btn accent">폴더 선택</button>
+          <button id="destination-clear-btn" class="btn">해제</button>
+        </div>
+        <p class="hint" style="margin-top:8px">지정하지 않으면 내보낼 때 공유 메뉴가 열립니다. OneDrive 앱을 설치해두면 폴더 선택 화면에 OneDrive가 나타납니다.</p>
+      </div>
       <div class="card">
         <h3>데이터 백업</h3>
         <p class="hint" style="margin-bottom:10px">사진/동영상을 포함한 전체 데이터를 파일로 저장하거나 복원할 수 있습니다.</p>
@@ -718,7 +732,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1864,7 +1878,25 @@ async function quickPoint(kidId, delta, date, reason) {
 // ═══════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════
+/** The destination folder is an Android-only concept, so it only shows there. */
+function renderDestination() {
+  const card = document.getElementById('destination-card');
+  if (!IS_ANDROID_APP || !window.AndroidBridge.destinationName) {
+    card.classList.add('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+  let name = '';
+  try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
+  document.getElementById('destination-name').textContent = name || '지정 안 됨 (공유로 내보냄)';
+}
+
+window.onDestinationPicked = () => {
+  renderDestination();
+};
+
 function renderSettingsTab() {
+  renderDestination();
   state.decayDraft = state.settings.decayWeeks ?? DEFAULT_SETTINGS.decayWeeks;
   state.streakWeeksDraft = state.settings.streakWeeks ?? DEFAULT_SETTINGS.streakWeeks;
   state.streakBonusDraft = state.settings.streakBonus ?? DEFAULT_SETTINGS.streakBonus;
@@ -2436,6 +2468,14 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
   showToast('PPT를 저장했습니다.');
 }
 
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+/** Year folder then dated folder, e.g. "2026/20260920". */
+function destinationSubPath(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  return `${y}/${y}${m}${d}`;
+}
+
 async function exportAwardPptx() {
   const saved = savedWeek();
   if (!saved || saved.winnerIds.length === 0) {
@@ -2448,8 +2488,28 @@ async function exportAwardPptx() {
   try {
     const bytes = await buildAwardPptx();
     const stamp = state.currentWeekDate.replace(/-/g, '');
-    saveBinaryToDevice(`BestWorshiper_${stamp}.pptx`, bytes,
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    const fileName = `BestWorshiper_${stamp}.pptx`;
+
+    if (!IS_ANDROID_APP) {
+      saveBinaryToDevice(fileName, bytes, PPTX_MIME);
+      return;
+    }
+
+    const b64 = base64FromBytes(bytes);
+    const sub = destinationSubPath(state.currentWeekDate);
+    const problem = window.AndroidBridge.saveToDestination
+      ? window.AndroidBridge.saveToDestination(fileName, b64, PPTX_MIME, sub)
+      : 'no-destination';
+
+    if (problem === '') {
+      showToast(`${sub} 에 저장했습니다.`);
+    } else if (problem === 'no-destination') {
+      // Nowhere to file it yet — hand it straight to the share sheet.
+      window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
+    } else {
+      showToast('폴더 저장 실패(' + problem + ') — 공유로 보냅니다.');
+      window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
+    }
   } catch (e) {
     console.error(e);
     showToast('PPT 생성에 실패했습니다: ' + e.message);
@@ -2716,6 +2776,15 @@ document.getElementById('script-reset-btn').addEventListener('click', resetScrip
 
 document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
 document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
+document.getElementById('destination-pick-btn').addEventListener('click', () => {
+  if (IS_ANDROID_APP && window.AndroidBridge.pickDestination) window.AndroidBridge.pickDestination();
+});
+document.getElementById('destination-clear-btn').addEventListener('click', () => {
+  if (IS_ANDROID_APP && window.AndroidBridge.clearDestination) {
+    window.AndroidBridge.clearDestination();
+    renderDestination();
+  }
+});
 document.getElementById('ceremony').addEventListener('click', e => {
   // The top bar owns its own buttons; anywhere else advances the ceremony.
   if (e.target.closest('.ceremony-top')) return;

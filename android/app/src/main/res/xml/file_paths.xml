@@ -2,4 +2,6 @@
 <paths>
     <!-- Temporary photos and videos handed over by the camera app. -->
     <cache-path name="capture" path="capture/" />
+    <!-- Exports staged for the share sheet. -->
+    <cache-path name="share" path="share/" />
 </paths>
