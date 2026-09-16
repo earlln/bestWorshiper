@@ -722,7 +722,7 @@ select:focus { outline: none; border-color: var(--accent); }
     <button id="ceremony-close" class="ceremony-icon" title="닫기">✕</button>
   </div>
   <div id="ceremony-stage" class="ceremony-stage"></div>
-  <div id="ceremony-hint" class="ceremony-hint">화면을 탭하세요</div>
+  <div id="ceremony-hint" class="ceremony-hint">Tap the screen</div>
   <div id="ceremony-confetti" class="confetti"></div>
 </div>
 
@@ -732,7 +732,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '1.9.2';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2070,6 +2070,13 @@ async function resetAllData() {
 // rather than pulling in a library — the app stays dependency-free and
 // keeps working offline.
 // ═══════════════════════════════════════════════════════════
+/** Opening line, shared by the on-screen ceremony and the exported deck. */
+function meetTodayLine(count) {
+  return count === 1
+    ? "Let's meet today's Best Worshiper!"
+    : `Let's meet today's ${count} Best Worshipers!`;
+}
+
 const EMU_PER_INCH = 914400;
 const DECK_W = 20 * EMU_PER_INCH;      // matches the EM Service template,
 const DECK_H = 11.25 * EMU_PER_INCH;   // so slides can be inserted unscaled
@@ -2260,9 +2267,7 @@ async function buildAwardPptx() {
   const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
 
   // 1. Title
-  const meetLine = winners.length === 1
-    ? "Let's meet today's Best Worshiper!"
-    : `Let's meet today's ${winners.length} Best Worshipers!`;
+  const meetLine = meetTodayLine(winners.length);
   slides.push({ xml: [
     bg(),
     pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
@@ -2573,15 +2578,15 @@ function renderCeremony() {
       <div class="cm-emoji">🏆</div>
       <div class="cm-big">Best Worshiper</div>
       <div class="cm-sub">${state.currentWeekDate}</div>
-      <div class="cm-sub">오늘의 주인공 ${total}명을 만나볼까요?</div>`;
-    hint.textContent = '화면을 탭하면 시작합니다';
+      <div class="cm-sub">${meetTodayLine(total)}</div>`;
+    hint.textContent = 'Tap to begin';
   } else if (step === ceremonySteps() - 1) {
     stage.innerHTML = `
-      <div class="cm-kicker">CONGRATULATIONS</div>
-      <div class="cm-big">축하합니다!</div>
+      <div class="cm-kicker">TODAY'S BEST WORSHIPERS</div>
+      <div class="cm-big">Congratulations!</div>
       <div class="cm-list">${ceremony.winners.map(k => `<span>${escapeHtml(k.name)}</span>`).join('')}</div>
-      <div class="cm-dim">다음 주에도 기대할게요 🙌</div>`;
-    hint.textContent = '탭하면 닫힙니다';
+      <div class="cm-dim">See you next week 🙌</div>`;
+    hint.textContent = 'Tap to close';
     burstConfetti(70);
     playFanfare();
   } else {
@@ -2593,16 +2598,16 @@ function renderCeremony() {
       stage.innerHTML = `
         <div class="cm-kicker">BEST WORSHIPER ${index + 1} / ${total}</div>
         <div class="cm-emoji cm-shake">🥁</div>
-        <div class="cm-big">두구두구두구...</div>
-        <div class="cm-dim">과연 누구일까요?</div>`;
-      hint.textContent = '탭하면 공개됩니다';
+        <div class="cm-big">Drumroll, please...</div>
+        <div class="cm-dim">Who could it be?</div>`;
+      hint.textContent = 'Tap to reveal';
       startDrum();
     } else {
       stage.innerHTML = `
         <div class="cm-kicker">BEST WORSHIPER ${index + 1} / ${total}</div>
         <div class="cm-photo">${ceremonyPhotoHTML(kid)}</div>
         <div class="cm-name">${escapeHtml(kid.name)}</div>`;
-      hint.textContent = index + 1 < total ? '탭하면 다음 주인공' : '탭하면 마무리';
+      hint.textContent = index + 1 < total ? 'Tap for the next one' : 'Tap to finish';
       burstConfetti(45);
       playFanfare();
     }
