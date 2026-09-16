@@ -732,7 +732,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2260,12 +2260,15 @@ async function buildAwardPptx() {
   const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
 
   // 1. Title
+  const meetLine = winners.length === 1
+    ? "Let's meet today's Best Worshiper!"
+    : `Let's meet today's ${winners.length} Best Worshipers!`;
   slides.push({ xml: [
     bg(),
     pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
     pptText({ x: 0, y: inEmu(4.2), w: DECK_W, h: inEmu(1.8), lines: 'Best Worshiper', size: 96, color: GOLD, bold: true }),
     pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.0), lines: when, size: 40, color: DIM }),
-    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: `오늘의 주인공 ${winners.length}명을 만나볼까요?`, size: 40, color: TEXT }),
+    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: meetLine, size: 40, color: TEXT }),
   ] });
 
   // 2. Nominees
@@ -2275,7 +2278,7 @@ async function buildAwardPptx() {
     const colW = (DECK_W - inEmu(2)) / cols;
     const rowH = Math.min(inEmu(1.1), (DECK_H - inEmu(3.4)) / Math.max(rows, 1));
     const shapes = [bg(), pptText({ x: 0, y: inEmu(0.9), w: DECK_W, h: inEmu(1.2),
-      lines: `Today's Nominees · ${nominees.length}명`, size: 54, color: ACCENT, bold: true })];
+      lines: `Today's Nominees · ${nominees.length}`, size: 54, color: ACCENT, bold: true })];
     nominees.forEach((name, i) => {
       shapes.push(pptText({
         x: Math.round(inEmu(1) + colW * Math.floor(i / rows)),
@@ -2296,8 +2299,8 @@ async function buildAwardPptx() {
       bg(),
       pptText({ x: 0, y: inEmu(1.5), w: DECK_W, h: inEmu(1.2), lines: label, size: 52, color: ACCENT, bold: true }),
       pptText({ x: 0, y: inEmu(3.4), w: DECK_W, h: inEmu(2.4), lines: '🥁', size: 170, color: TEXT }),
-      pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.6), lines: '두구두구두구...', size: 96, color: GOLD, bold: true }),
-      pptText({ x: 0, y: inEmu(8.6), w: DECK_W, h: inEmu(1.0), lines: '과연 누구일까요?', size: 40, color: DIM }),
+      pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.6), lines: 'Drumroll, please...', size: 96, color: GOLD, bold: true }),
+      pptText({ x: 0, y: inEmu(8.6), w: DECK_W, h: inEmu(1.0), lines: 'Who could it be?', size: 40, color: DIM }),
     ] });
 
     const jpeg = await photoForSlide(kid);
@@ -2321,7 +2324,7 @@ async function buildAwardPptx() {
 
     const rx = px + box + inEmu(1.4);
     const rw = DECK_W - rx - inEmu(1.2);
-    shapes.push(pptText({ x: rx, y: inEmu(3.6), w: rw, h: inEmu(1.2), lines: '🏆  축하합니다!', size: 48, color: GOLD, bold: true, align: 'l' }));
+    shapes.push(pptText({ x: rx, y: inEmu(3.6), w: rw, h: inEmu(1.2), lines: '🏆  Congratulations!', size: 48, color: GOLD, bold: true, align: 'l' }));
     shapes.push(pptText({ x: rx, y: inEmu(5.0), w: rw, h: inEmu(2.2), lines: kid.name, size: 130, color: TEXT, bold: true, align: 'l' }));
     slides.push({ xml: shapes, imageRel });
   }
@@ -2333,7 +2336,7 @@ async function buildAwardPptx() {
     pptText({ x: 0, y: inEmu(1.2), w: DECK_W, h: inEmu(1.6), lines: 'Congratulations!', size: 84, color: GOLD, bold: true }),
     pptText({ x: 0, y: inEmu(3.0), w: DECK_W, h: inEmu(1.0), lines: "Today's Best Worshipers", size: 40, color: DIM }),
     pptText({ x: inEmu(1), y: inEmu(4.3), w: DECK_W - inEmu(2), h: inEmu(4.0), lines: winners.map(k => k.name), size: nameSize, color: TEXT, bold: true }),
-    pptText({ x: 0, y: inEmu(9.4), w: DECK_W, h: inEmu(1.0), lines: '다음 주에도 기대할게요 🙌', size: 40, color: ACCENT }),
+    pptText({ x: 0, y: inEmu(9.4), w: DECK_W, h: inEmu(1.0), lines: 'See you next week 🙌', size: 40, color: ACCENT }),
   ] });
 
   return zipStore(pptxParts(slides, photos));

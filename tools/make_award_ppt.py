@@ -77,6 +77,11 @@ def text_box(slide, x, y, w, h, text, size, color=TEXT, bold=False,
     return box
 
 
+def meet_line(count):
+    return ("Let's meet today's Best Worshiper!" if count == 1
+            else f"Let's meet today's {count} Best Worshipers!")
+
+
 def slide_title(prs, when, count):
     slide = blank(prs)
     text_box(slide, 0, Inches(1.8), SLIDE_W, Inches(2.2), '🏆', 150)
@@ -84,14 +89,14 @@ def slide_title(prs, when, count):
              'Best Worshiper', 96, GOLD, True, EN_FONT)
     text_box(slide, 0, Inches(6.2), SLIDE_W, Inches(1.0), when, 40, DIM, font=EN_FONT)
     text_box(slide, 0, Inches(7.6), SLIDE_W, Inches(1.2),
-             f'오늘의 주인공 {count}명을 만나볼까요?', 40, TEXT)
+             meet_line(count), 40, TEXT)
     return slide
 
 
 def slide_nominees(prs, names):
     slide = blank(prs)
     text_box(slide, 0, Inches(0.9), SLIDE_W, Inches(1.2),
-             f"Today's Nominees · {len(names)}명", 54, ACCENT, True, EN_FONT)
+             f"Today's Nominees · {len(names)}", 54, ACCENT, True, EN_FONT)
 
     # Lay the names out in up to four columns so a long list still fits.
     cols = 2 if len(names) <= 8 else (3 if len(names) <= 15 else 4)
@@ -114,9 +119,9 @@ def slide_suspense(prs, index, total):
              f'Best Worshiper  {index} / {total}', 52, ACCENT, True, EN_FONT)
     text_box(slide, 0, Inches(3.4), SLIDE_W, Inches(2.4), '🥁', 170)
     text_box(slide, 0, Inches(6.2), SLIDE_W, Inches(1.6),
-             '두구두구두구...', 96, GOLD, True)
+             'Drumroll, please...', 96, GOLD, True, EN_FONT)
     text_box(slide, 0, Inches(8.6), SLIDE_W, Inches(1.0),
-             '과연 누구일까요?', 40, DIM)
+             'Who could it be?', 40, DIM, font=EN_FONT)
     return slide
 
 
@@ -153,7 +158,7 @@ def slide_reveal(prs, name, index, total, photo=None):
     right_x = px + photo_box + Inches(1.4)
     right_w = SLIDE_W - right_x - Inches(1.2)
     text_box(slide, right_x, Inches(3.6), right_w, Inches(1.2),
-             '🏆  축하합니다!', 48, GOLD, True, align=PP_ALIGN.LEFT)
+             '🏆  Congratulations!', 48, GOLD, True, EN_FONT, align=PP_ALIGN.LEFT)
     text_box(slide, right_x, Inches(5.0), right_w, Inches(2.2),
              name, 130, TEXT, True, align=PP_ALIGN.LEFT)
     return slide
@@ -170,7 +175,7 @@ def slide_finale(prs, names):
     text_box(slide, Inches(1.0), Inches(4.3), SLIDE_W - Inches(2.0), Inches(4.0),
              '\n'.join(names), size, TEXT, True, spacing=1.3)
     text_box(slide, 0, Inches(9.4), SLIDE_W, Inches(1.0),
-             '다음 주에도 기대할게요 🙌', 40, ACCENT)
+             'See you next week 🙌', 40, ACCENT, font=EN_FONT)
     return slide
 
 
