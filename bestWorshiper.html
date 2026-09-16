@@ -458,54 +458,54 @@ select:focus { outline: none; border-color: var(--accent); }
 <header id="topbar">
   <div class="brand">🙌 bestWorshiper <span id="app-version-label" class="version-tag"></span></div>
   <nav id="tabs">
-    <button class="tab-btn active" data-tab="candidates">등록후보</button>
-    <button class="tab-btn" data-tab="week">이번주 선정</button>
-    <button class="tab-btn" data-tab="history">히스토리</button>
-    <button class="tab-btn" data-tab="kids">아이들 관리</button>
+    <button class="tab-btn active" data-tab="candidates">Nominees</button>
+    <button class="tab-btn" data-tab="week">This Week</button>
+    <button class="tab-btn" data-tab="history">History</button>
+    <button class="tab-btn" data-tab="kids">Children</button>
   </nav>
-  <button id="settings-gear-btn" class="icon-btn" title="설정" aria-label="설정">⚙</button>
+  <button id="settings-gear-btn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
 </header>
 
 <main id="main">
 
   <section id="tab-candidates" class="tab-panel active">
     <div class="panel-header">
-      <h2>등록후보</h2>
+      <h2>Nominees</h2>
       <div class="week-date-row">
-        <label style="font-size:12px;color:var(--text-dim)">날짜</label>
+        <label style="font-size:12px;color:var(--text-dim)">Date</label>
         <input type="date" id="cand-date-input">
         <span id="cand-mode-badge" class="badge"></span>
       </div>
     </div>
     <div class="card">
-      <div class="hint" style="margin-bottom:10px">이번주 Best Worshiper 후보로 등록한 아이들을 선택하고 <b>저장</b>하세요. 저장한 후보가 "이번주 선정" 화면에 나타납니다.<br>오른쪽 점수는 <b>감점(자동)+가점(연속)</b> 합계입니다. ± 로 주는 수동점수는 "이번주 선정" 화면에서 더해집니다.</div>
+      <div class="hint" style="margin-bottom:10px">Pick the children nominated this week and press <b>Save nominees</b>. Saved nominees appear on the <b>This Week</b> screen.<br>The score on the right is <b>penalty + streak bonus</b>; points given with ± are added on the This Week screen.</div>
       <div id="cand-rule-summary"></div>
       <div class="row-actions" style="margin-bottom:8px">
         <select id="candidate-sort-mode">
-          <option value="alpha">가나다순</option>
-          <option value="priority">우선순위순</option>
+          <option value="alpha">A → Z</option>
+          <option value="priority">Custom order</option>
         </select>
-        <input type="text" id="candidate-search" placeholder="이름 검색 (선택)" style="flex:1;min-width:100px">
+        <input type="text" id="candidate-search" placeholder="Search name (optional)" style="flex:1;min-width:100px">
       </div>
       <div class="row-actions" style="margin-bottom:8px">
-        <button class="btn small" data-action="selectAllCandidates" data-select="1">전체 선택</button>
-        <button class="btn small" data-action="selectAllCandidates" data-select="0">전체 해제</button>
-        <button class="btn small" id="copy-last-week-btn">지난주 후보 그대로</button>
+        <button class="btn small" data-action="selectAllCandidates" data-select="1">Select all</button>
+        <button class="btn small" data-action="selectAllCandidates" data-select="0">Clear all</button>
+        <button class="btn small" id="copy-last-week-btn">Same as last week</button>
         <span class="hint" id="candidate-count-label"></span>
       </div>
       <div id="candidate-list" class="kid-check-list"></div>
     </div>
     <div class="week-actions">
-      <button id="cand-save-btn" class="btn accent">후보 저장</button>
-      <button id="cand-delete-btn" class="btn danger hidden">이 주 기록 삭제</button>
+      <button id="cand-save-btn" class="btn accent">Save nominees</button>
+      <button id="cand-delete-btn" class="btn danger hidden">Delete this week</button>
     </div>
   </section>
 
   <section id="tab-week" class="tab-panel">
     <div class="panel-header">
-      <h2>이번주 선정</h2>
+      <h2>This Week</h2>
       <div class="week-date-row">
-        <label style="font-size:12px;color:var(--text-dim)">날짜</label>
+        <label style="font-size:12px;color:var(--text-dim)">Date</label>
         <input type="date" id="week-date-input">
         <span id="week-mode-badge" class="badge"></span>
       </div>
@@ -513,65 +513,65 @@ select:focus { outline: none; border-color: var(--accent); }
     <div class="card">
       <div class="script-panel">
         <div class="script-head">
-          <span>🎤 진행 멘트</span>
-          <button id="script-edit-btn" class="btn small">편집</button>
+          <span>🎤 Announcement script</span>
+          <button id="script-edit-btn" class="btn small">Edit</button>
         </div>
         <div id="script-view" class="script-body"></div>
         <div id="script-editor" class="hidden">
           <textarea id="script-input" spellcheck="false"></textarea>
           <div class="hint" style="margin-top:6px">
-            자동 치환: <code>{후보수}</code> 후보 인원 · <code>{후보명단}</code> 후보 이름 ·
-            <code>{선정인원}</code> 3 · <code>{선정인원영문}</code> Three · <code>{날짜}</code>
+            Auto-filled: <code>{count}</code> nominees · <code>{names}</code> their names ·
+            <code>{winners}</code> 3 · <code>{winnersWord}</code> Three · <code>{date}</code>
           </div>
           <div class="row-actions" style="margin-top:8px;justify-content:flex-end">
-            <button id="script-reset-btn" class="btn small">기본 문구</button>
-            <button id="script-cancel-btn" class="btn small">취소</button>
-            <button id="script-save-btn" class="btn small accent">저장</button>
+            <button id="script-reset-btn" class="btn small">Default</button>
+            <button id="script-cancel-btn" class="btn small">Cancel</button>
+            <button id="script-save-btn" class="btn small accent">Save</button>
           </div>
         </div>
       </div>
-      <div class="hint" style="margin-bottom:10px">± 버튼으로 준 점수는 <b>이 주(<span id="week-points-date-label"></span>)에만</b> 반영됩니다.</div>
+      <div class="hint" style="margin-bottom:10px">Points given with ± count for <b>this week only</b> (<span id="week-points-date-label"></span>).</div>
       <div class="row-actions" style="margin-bottom:10px">
-        <label style="font-size:12px;color:var(--text-dim)">선정 인원</label>
+        <label style="font-size:12px;color:var(--text-dim)">Winners</label>
         <div class="stepper">
           <button class="step-btn" data-action="winnerCountStep" data-delta="-1">−</button>
           <span class="step-val" id="winner-count-display">3</span>
           <button class="step-btn" data-action="winnerCountStep" data-delta="1">+</button>
         </div>
-        <button id="auto-select-btn" class="btn small accent">상위 N명 자동 선정</button>
+        <button id="auto-select-btn" class="btn small accent">Pick top N</button>
       </div>
       <div id="candidate-score-table"></div>
     </div>
     <div class="week-actions">
-      <button id="week-save-btn" class="btn accent">선정 저장</button>
-      <button id="ceremony-btn" class="btn">🎉 시상식 시작</button>
-      <button id="pptx-btn" class="btn">📊 PPT 내보내기</button>
+      <button id="week-save-btn" class="btn accent">Save winners</button>
+      <button id="ceremony-btn" class="btn">🎉 Start ceremony</button>
+      <button id="pptx-btn" class="btn">📊 Export PPT</button>
     </div>
   </section>
 
   <section id="tab-kids" class="tab-panel">
     <div class="panel-header">
-      <h2>아이들 관리</h2>
+      <h2>Children</h2>
       <div class="row-actions">
         <select id="kids-sort-mode">
-          <option value="alpha">가나다순</option>
-          <option value="priority">우선순위순</option>
+          <option value="alpha">A → Z</option>
+          <option value="priority">Custom order</option>
         </select>
-        <input type="text" id="kids-search" placeholder="이름 검색 (선택)">
-        <label class="chk-inline"><input type="checkbox" id="kids-show-inactive"> 비활성 포함</label>
-        <button id="kid-add-btn" class="btn accent">+ 아이 추가</button>
+        <input type="text" id="kids-search" placeholder="Search name (optional)">
+        <label class="chk-inline"><input type="checkbox" id="kids-show-inactive"> Include inactive</label>
+        <button id="kid-add-btn" class="btn accent">+ Add child</button>
       </div>
     </div>
-    <div id="kids-priority-hint" class="hint hidden" style="margin-bottom:10px">우선순위순에서는 카드의 ▲▼ 버튼으로 순서를 바꿀 수 있습니다. 후보자 등록 화면에서 "우선순위순"을 선택하면 이 순서로 표시됩니다.</div>
+    <div id="kids-priority-hint" class="hint hidden" style="margin-bottom:10px">In custom order, use the ▲▼ buttons on each card to rearrange. The Nominees screen follows this order when "Custom order" is selected.</div>
     <div id="kids-grid" class="kids-grid"></div>
   </section>
 
   <section id="tab-history" class="tab-panel">
     <div class="panel-header">
-      <h2>히스토리</h2>
+      <h2>History</h2>
       <div class="row-actions">
-        <input type="text" id="history-search" placeholder="이름으로 검색...">
-        <button id="history-export-text-btn" class="btn">📝 텍스트 관리</button>
+        <input type="text" id="history-search" placeholder="Search by name...">
+        <button id="history-export-text-btn" class="btn">📝 Text view</button>
       </div>
     </div>
     <div class="card"><div id="history-table"></div></div>
@@ -581,27 +581,27 @@ select:focus { outline: none; border-color: var(--accent); }
 
 <div id="kid-modal" class="modal hidden">
   <div class="modal-box">
-    <div class="modal-title"><span id="kid-modal-title">아이 추가</span><button class="modal-close" id="kid-modal-close">✕</button></div>
-    <label>이름</label>
-    <input type="text" id="kid-name-input" placeholder="이름">
-    <label>사진 / 동영상</label>
+    <div class="modal-title"><span id="kid-modal-title">Add child</span><button class="modal-close" id="kid-modal-close">✕</button></div>
+    <label>Name</label>
+    <input type="text" id="kid-name-input" placeholder="Name">
+    <label>Photo / Video</label>
     <div class="row-actions" style="gap:8px">
-      <label class="btn file-btn">📷 사진 찍기
+      <label class="btn file-btn">📷 Take photo
         <input type="file" id="kid-camera-input" accept="image/*" capture="environment" hidden>
       </label>
-      <label class="btn file-btn">🎬 동영상 촬영
+      <label class="btn file-btn">🎬 Record video
         <input type="file" id="kid-video-input" accept="video/*" capture="environment" hidden>
       </label>
-      <label class="btn file-btn">🖼 갤러리
+      <label class="btn file-btn">🖼 Gallery
         <input type="file" id="kid-media-input" accept="image/*,video/*" hidden>
       </label>
     </div>
     <div id="kid-media-preview" class="media-preview">🧒</div>
-    <button id="kid-media-remove" class="btn small hidden" style="margin-top:8px">미디어 제거</button>
-    <label class="chk-inline hidden" id="kid-active-row" style="margin-top:14px"><input type="checkbox" id="kid-active-input"> 활성 (이번주 후보로 등록 가능)</label>
+    <button id="kid-media-remove" class="btn small hidden" style="margin-top:8px">Remove media</button>
+    <label class="chk-inline hidden" id="kid-active-row" style="margin-top:14px"><input type="checkbox" id="kid-active-input"> Active (can be nominated)</label>
     <div class="modal-actions">
-      <button id="kid-cancel-btn" class="btn">취소</button>
-      <button id="kid-save-btn" class="btn accent">저장</button>
+      <button id="kid-cancel-btn" class="btn">Cancel</button>
+      <button id="kid-save-btn" class="btn accent">Save</button>
     </div>
   </div>
 </div>
@@ -615,27 +615,27 @@ select:focus { outline: none; border-color: var(--accent); }
 
 <div id="text-export-modal" class="modal hidden">
   <div class="modal-box" style="width:480px">
-    <div class="modal-title"><span>기록 텍스트 관리</span><button class="modal-close" id="text-export-close">✕</button></div>
-    <p class="hint" style="margin:8px 0">여기서 직접 고치거나, 텍스트 파일을 불러와 <b>적용</b>하면 기록에 반영됩니다.</p>
+    <div class="modal-title"><span>Records as text</span><button class="modal-close" id="text-export-close">✕</button></div>
+    <p class="hint" style="margin:8px 0">Edit here, or open a text file, then press <b>Apply</b> to write it back into the records.</p>
     <textarea id="text-export-area" spellcheck="false" style="width:100%;height:300px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:12px;font-family:'Consolas',monospace;resize:vertical"></textarea>
     <div class="modal-actions" style="flex-wrap:wrap">
-      <label class="btn file-btn">📂 파일 열기<input type="file" id="text-import-input" accept=".txt,text/plain" hidden></label>
-      <button id="text-export-download-btn" class="btn">⬇ .txt 저장</button>
-      <button id="text-export-copy-btn" class="btn">📋 복사</button>
-      <button id="text-apply-btn" class="btn accent">✅ 적용 (가져오기)</button>
+      <label class="btn file-btn">📂 Open file<input type="file" id="text-import-input" accept=".txt,text/plain" hidden></label>
+      <button id="text-export-download-btn" class="btn">⬇ Save .txt</button>
+      <button id="text-export-copy-btn" class="btn">📋 Copy</button>
+      <button id="text-apply-btn" class="btn accent">✅ Apply</button>
     </div>
   </div>
 </div>
 
 <div id="settings-modal" class="modal hidden">
   <div class="modal-box" style="width:440px">
-    <div class="modal-title"><span>설정</span><button class="modal-close" id="settings-modal-close">✕</button></div>
+    <div class="modal-title"><span>Settings</span><button class="modal-close" id="settings-modal-close">✕</button></div>
     <div class="settings-cards">
       <div class="card">
-        <h3>자동 감점 규칙</h3>
-        <p class="hint">최근에 Best Worshiper로 선정된 아이는 이후 몇 주간 자동으로 감점을 받습니다. 지난주 -N점, 그 전주 -(N-1)점 ... 순으로 1점씩 줄어들다가 N주가 지나면 감점이 사라집니다. (기본값 N=5)</p>
+        <h3>Recent-winner penalty</h3>
+        <p class="hint">A child chosen recently is docked for the next few weeks: −N last week, −(N−1) the week before, easing by one each week until it disappears after N weeks. (Default N = 5)</p>
         <div class="setting-row">
-          <div class="setting-key">적용 주수 (N)</div>
+          <div class="setting-key">Weeks applied (N)</div>
           <div class="stepper">
             <button class="step-btn" data-action="decayWeeksStep" data-delta="-1">−</button>
             <span class="step-val" id="settings-decay-weeks-display">5</span>
@@ -644,10 +644,10 @@ select:focus { outline: none; border-color: var(--accent); }
         </div>
       </div>
       <div class="card">
-        <h3>연속 후보 등록 가점</h3>
-        <p class="hint">매주 빠지지 않고 후보로 등록한 아이에게 가점을 줍니다. 첫 주는 기준점이라 <b>2주 연속부터</b> 가점이 붙고, 연속 주수가 길수록 커집니다.</p>
+        <h3>Streak bonus</h3>
+        <p class="hint">Rewards a child nominated week after week. The first week is the baseline, so the bonus starts at <b>two weeks in a row</b> and grows with the streak.</p>
         <div class="setting-row">
-          <div class="setting-key">인정 최대 주수</div>
+          <div class="setting-key">Max weeks counted</div>
           <div class="stepper">
             <button class="step-btn" data-action="streakWeeksStep" data-delta="-1">−</button>
             <span class="step-val" id="settings-streak-weeks-display">4</span>
@@ -655,7 +655,7 @@ select:focus { outline: none; border-color: var(--accent); }
           </div>
         </div>
         <div class="setting-row">
-          <div class="setting-key">주당 가점</div>
+          <div class="setting-key">Points per week</div>
           <div class="stepper">
             <button class="step-btn" data-action="streakBonusStep" data-delta="-1">−</button>
             <span class="step-val" id="settings-streak-bonus-display">1</span>
@@ -665,51 +665,51 @@ select:focus { outline: none; border-color: var(--accent); }
         <p class="hint" id="streak-preview"></p>
       </div>
       <div class="card">
-        <button id="settings-save-btn" class="btn accent" style="width:100%">설정 저장</button>
+        <button id="settings-save-btn" class="btn accent" style="width:100%">Save settings</button>
       </div>
       <div class="card" id="install-guide-card">
-        <h3>📱 홈 화면에 앱으로 추가</h3>
-        <p class="hint"><b>아이폰</b>: Safari로 열기 → 하단 공유 버튼 → "홈 화면에 추가"</p>
-        <p class="hint" style="margin-top:4px"><b>안드로이드</b>: Chrome으로 열기 → 오른쪽 위 메뉴(⋮) → "홈 화면에 추가" / "앱 설치"</p>
+        <h3>📱 Add to home screen</h3>
+        <p class="hint"><b>iPhone</b>: open in Safari → Share → "Add to Home Screen"</p>
+        <p class="hint" style="margin-top:4px"><b>Android</b>: open in Chrome → menu (⋮) → "Add to Home screen" / "Install app"</p>
       </div>
       <div class="card hidden" id="destination-card">
-        <h3>📁 PPT 저장 위치</h3>
-        <p class="hint">한 번 지정해두면 PPT를 내보낼 때마다 <b>선택한 폴더 / 연도 / 날짜</b> 하위에 자동으로 저장됩니다.<br>
-        예) OneDrive의 <b>EM</b> 폴더를 고르면 → <code>EM/2026/20260920/BestWorshiper_20260920.pptx</code></p>
+        <h3>📁 PPT destination</h3>
+        <p class="hint">Set once, and every export files itself under <b>chosen folder / year / date</b>.<br>
+        e.g. pick <b>EM</b> on OneDrive → <code>EM/2026/20260920/BestWorshiper_20260920.pptx</code></p>
         <div class="setting-row">
-          <div class="setting-key">현재 위치</div>
-          <div><b id="destination-name">지정 안 됨</b></div>
+          <div class="setting-key">Current folder</div>
+          <div><b id="destination-name">Not set</b></div>
         </div>
         <div class="row-actions">
-          <button id="destination-pick-btn" class="btn accent">폴더 선택</button>
-          <button id="destination-clear-btn" class="btn">해제</button>
+          <button id="destination-pick-btn" class="btn accent">Choose folder</button>
+          <button id="destination-clear-btn" class="btn">Clear</button>
         </div>
-        <p class="hint" style="margin-top:8px">지정하지 않으면 내보낼 때 공유 메뉴가 열립니다. OneDrive 앱을 설치해두면 폴더 선택 화면에 OneDrive가 나타납니다.</p>
+        <p class="hint" style="margin-top:8px">With no folder set, exporting opens the share sheet instead. Install the OneDrive app and it appears in the folder picker.</p>
       </div>
       <div class="card">
-        <h3>데이터 백업</h3>
-        <p class="hint" style="margin-bottom:10px">사진/동영상을 포함한 전체 데이터를 파일로 저장하거나 복원할 수 있습니다.</p>
+        <h3>Backup</h3>
+        <p class="hint" style="margin-bottom:10px">Save or restore everything, photos and videos included.</p>
         <div class="row-actions">
-          <button id="export-btn" class="btn">⬇ 내보내기 (JSON 다운로드)</button>
-          <label class="btn file-btn">⬆ 가져오기 (JSON 업로드)<input type="file" id="import-input" accept="application/json" hidden></label>
+          <button id="export-btn" class="btn">⬇ Export (JSON)</button>
+          <label class="btn file-btn">⬆ Import (JSON)<input type="file" id="import-input" accept="application/json" hidden></label>
         </div>
       </div>
       <div class="card">
-        <h3>버전 정보</h3>
+        <h3>Version</h3>
         <div class="setting-row">
-          <div class="setting-key">앱 버전</div>
+          <div class="setting-key">App version</div>
           <div><b id="settings-version-label"></b></div>
         </div>
         <div class="setting-row" id="update-check-row">
-          <div class="setting-key">최신 버전 확인</div>
-          <button id="check-update-btn" class="btn small">↻ 업데이트 확인</button>
+          <div class="setting-key">Check for updates</div>
+          <button id="check-update-btn" class="btn small">↻ Check</button>
         </div>
-        <p class="hint" id="update-hint">업데이트가 있으면 앱을 새로 받아 다시 시작합니다. 저장된 데이터는 그대로 유지됩니다.</p>
+        <p class="hint" id="update-hint">If an update exists the app reloads itself. Saved data is kept.</p>
       </div>
       <div class="card danger-zone">
-        <h3>초기화</h3>
-        <p class="hint" style="margin-bottom:10px">모든 아이 / 히스토리 / 포인트 데이터를 삭제합니다. 먼저 내보내기로 백업하는 것을 권장합니다.</p>
-        <button id="reset-btn" class="btn danger">전체 데이터 초기화</button>
+        <h3>Reset</h3>
+        <p class="hint" style="margin-bottom:10px">Deletes every child, record and point. Export a backup first.</p>
+        <button id="reset-btn" class="btn danger">Erase all data</button>
       </div>
     </div>
   </div>
@@ -717,9 +717,9 @@ select:focus { outline: none; border-color: var(--accent); }
 
 <div id="ceremony" class="ceremony hidden">
   <div class="ceremony-top">
-    <button id="ceremony-sound" class="ceremony-icon" title="소리">🔊</button>
+    <button id="ceremony-sound" class="ceremony-icon" title="Sound">🔊</button>
     <div id="ceremony-dots" class="ceremony-dots"></div>
-    <button id="ceremony-close" class="ceremony-icon" title="닫기">✕</button>
+    <button id="ceremony-close" class="ceremony-icon" title="Close">✕</button>
   </div>
   <div id="ceremony-stage" class="ceremony-stage"></div>
   <div id="ceremony-hint" class="ceremony-hint">Tap the screen</div>
@@ -732,7 +732,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '2.0.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -802,10 +802,10 @@ async function dbClear(store) {
  * week on screen so the numbers and names never need editing by hand.
  */
 const DEFAULT_SCRIPT = [
-  "We have as many as {후보수} nominees for today's Best Worshiper.",
-  'The nominees are as follows: {후보명단}',
+  "We have as many as {count} nominees for today's Best Worshiper.",
+  'The nominees are as follows: {names}',
   'How many Best Worshipers do you think we should choose?',
-  "{선정인원영문}? Great! Let's find out who they are...",
+  "{winnersWord}? Great! Let's find out who they are...",
   'Okay, everyone... drumroll, please!',
 ].join('\n');
 
@@ -948,7 +948,7 @@ function computeScore(kidId, asOfDate, liveCandidateIds) {
 }
 
 function kidById(id) {
-  return state.kids.find(k => k.id === id) || { id, name: '(삭제된 아이)', active: false, media: null };
+  return state.kids.find(k => k.id === id) || { id, name: '(removed)', active: false, media: null };
 }
 
 function getSortOrder(kid) {
@@ -1046,7 +1046,7 @@ function loadWeekForDate(dateStr) {
   }
 }
 
-/** 등록후보 tab — pick who is running this week, then save. */
+/** Nominees tab — pick who is running this week, then save. */
 function renderCandidatesTab() {
   if (!state.currentWeekDate) loadWeekForDate(todayStr());
   document.getElementById('cand-date-input').value = state.currentWeekDate;
@@ -1055,11 +1055,11 @@ function renderCandidatesTab() {
   const badge = document.getElementById('cand-mode-badge');
   const delBtn = document.getElementById('cand-delete-btn');
   if (saved) {
-    badge.textContent = `저장됨 · 후보 ${saved.candidateIds.length}명`;
+    badge.textContent = `Saved · ${saved.candidateIds.length} nominees`;
     badge.className = 'badge mode-edit';
     delBtn.classList.remove('hidden');
   } else {
-    badge.textContent = '미저장';
+    badge.textContent = 'Not saved';
     badge.className = 'badge mode-new';
     delBtn.classList.add('hidden');
   }
@@ -1085,12 +1085,13 @@ function renderScriptText() {
   const template = state.settings.ceremonyScript ?? DEFAULT_SCRIPT;
 
   return template
-    .replace(/\{후보수\}/g, names.length)
-    .replace(/\{후보수영문\}/g, englishNumber(names.length))
-    .replace(/\{후보명단\}/g, names.join(', '))
-    .replace(/\{선정인원\}/g, state.winnerCount)
-    .replace(/\{선정인원영문\}/g, englishNumber(state.winnerCount))
-    .replace(/\{날짜\}/g, state.currentWeekDate);
+    // Korean names are kept as aliases so scripts saved earlier keep working.
+    .replace(/\{(count|후보수)\}/g, names.length)
+    .replace(/\{(countWord|후보수영문)\}/g, englishNumber(names.length))
+    .replace(/\{(names|후보명단)\}/g, names.join(', '))
+    .replace(/\{(winners|선정인원)\}/g, state.winnerCount)
+    .replace(/\{(winnersWord|선정인원영문)\}/g, englishNumber(state.winnerCount))
+    .replace(/\{(date|날짜)\}/g, state.currentWeekDate);
 }
 
 function renderScriptPanel() {
@@ -1116,14 +1117,14 @@ async function saveScript() {
   await loadAll();
   closeScriptEditor();
   renderScriptPanel();
-  showToast('진행 멘트를 저장했습니다.');
+  showToast('Script saved.');
 }
 
 function resetScript() {
   document.getElementById('script-input').value = DEFAULT_SCRIPT;
 }
 
-/** 이번주 선정 tab — score the saved candidates and choose the winners. */
+/** This Week tab — score the saved nominees and choose the winners. */
 function renderWeekTab() {
   if (!state.currentWeekDate) loadWeekForDate(todayStr());
   document.getElementById('week-date-input').value = state.currentWeekDate;
@@ -1132,13 +1133,13 @@ function renderWeekTab() {
   const saved = savedWeek();
   const badge = document.getElementById('week-mode-badge');
   if (saved && saved.winnerIds.length > 0) {
-    badge.textContent = `선정 완료 · ${saved.winnerIds.length}명`;
+    badge.textContent = `Winners chosen · ${saved.winnerIds.length}`;
     badge.className = 'badge mode-edit';
   } else if (saved) {
-    badge.textContent = `후보 ${saved.candidateIds.length}명 · 선정 전`;
+    badge.textContent = `${saved.candidateIds.length} nominees · not judged`;
     badge.className = 'badge mode-new';
   } else {
-    badge.textContent = '후보 미등록';
+    badge.textContent = 'No nominees';
     badge.className = 'badge mode-new';
   }
   renderScriptPanel();
@@ -1157,8 +1158,8 @@ function renderCandidatePicker() {
 
   if (kids.length === 0) {
     list.innerHTML = state.kids.length === 0
-      ? '<div class="hint" style="padding:8px;line-height:1.7">등록된 아이가 없습니다.<br>· 백업 파일이 있다면 ⚙ 설정 → <b>가져오기</b><br>· 처음이라면 <b>아이들 관리</b> 탭에서 추가</div>'
-      : '<div class="hint" style="padding:8px">조건에 맞는 아이가 없습니다.</div>';
+      ? '<div class="hint" style="padding:8px;line-height:1.7">No children yet.<br>· Have a backup? ⚙ Settings → <b>Import</b><br>· Starting fresh? Add them on the <b>Children</b> tab</div>'
+      : '<div class="hint" style="padding:8px">No children match.</div>';
     return;
   }
 
@@ -1174,8 +1175,8 @@ function renderCandidatePicker() {
     // selection screen, which hasn't happened when a roster is put together.
     // The figure shown excludes them too, so it always matches its reasons.
     const notes = [];
-    if (s.penalty !== 0) notes.push(`감점 ${fmtNum(s.penalty)} (${mmdd(s.penaltyFrom)} 선정, ${s.penaltyWeeksAgo}주 전)`);
-    if (s.bonus !== 0) notes.push(`가점 +${fmtNum(s.bonus)} (${s.streak}주 연속)`);
+    if (s.penalty !== 0) notes.push(`penalty ${fmtNum(s.penalty)} (won ${mmdd(s.penaltyFrom)}, ${s.penaltyWeeksAgo}w ago)`);
+    if (s.bonus !== 0) notes.push(`bonus +${fmtNum(s.bonus)} (${s.streak} weeks in a row)`);
     const autoScore = round1(s.penalty + s.bonus);
 
     return `
@@ -1184,14 +1185,14 @@ function renderCandidatePicker() {
         ${mediaThumbHTMLSmall(k)}
         <span class="kname">
           ${escapeHtml(k.name)}
-          <span class="kreason">${notes.length ? notes.join(' · ') : '감점·가점 없음'}</span>
+          <span class="kreason">${notes.length ? notes.join(' · ') : 'no penalty or bonus'}</span>
         </span>
         <span class="kscore">${fmtScore(autoScore)}</span>
       </label>`;
   }).join('');
 
   document.getElementById('candidate-count-label').textContent =
-    `선택 ${state.candidateIds.size}명 / 표시 ${kids.length}명`;
+    `${state.candidateIds.size} selected / ${kids.length} shown`;
 }
 
 function selectAllCandidates(select) {
@@ -1210,12 +1211,12 @@ function copyLastWeekCandidates() {
   const prior = state.weeks
     .filter(w => w.date < state.currentWeekDate)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
-  if (!prior) { showToast('이전 주 기록이 없습니다.'); return; }
+  if (!prior) { showToast('No earlier week on record.'); return; }
   const activeIds = prior.candidateIds.filter(id => kidById(id).active);
   state.candidateIds = new Set(activeIds);
   state.winnerIds = new Set();
   renderCandidatePicker();
-  showToast(`${prior.date} 후보 ${activeIds.length}명을 불러왔습니다.`);
+  showToast(`Loaded ${activeIds.length} nominees from ${prior.date}.`);
 }
 
 function mediaThumbHTMLSmall(kid) {
@@ -1247,8 +1248,8 @@ function renderCandidateScoreTable() {
   // always reflects what was actually registered for the week.
   if (!saved || saved.candidateIds.length === 0) {
     box.innerHTML = `<div class="hint" style="line-height:1.8">
-      ${state.currentWeekDate} 에 저장된 후보가 없습니다.<br>
-      <b>등록후보</b> 탭에서 후보를 선택하고 <b>후보 저장</b>을 눌러주세요.
+      No nominees saved for ${state.currentWeekDate}.<br>
+      Pick them on the <b>Nominees</b> tab and press <b>Save nominees</b>.
     </div>`;
     return;
   }
@@ -1261,7 +1262,7 @@ function renderCandidateScoreTable() {
     ${renderRuleSummary()}
     <div class="table-scroll">
     <table>
-      <thead><tr><th></th><th>이름</th><th>수동점수</th><th>감점(자동)</th><th>가점(연속)</th><th>총점</th><th>±</th><th>선정</th></tr></thead>
+      <thead><tr><th></th><th>Name</th><th>Points</th><th>Penalty</th><th>Streak</th><th>Total</th><th>±</th><th>Win</th></tr></thead>
       <tbody>
         ${scored.map(({ kid, score }) => `
           <tr class="${state.winnerIds.has(kid.id) ? 'winner-row' : ''}">
@@ -1271,19 +1272,19 @@ function renderCandidateScoreTable() {
             <td>
               ${fmtScore(score.penalty)}
               ${score.penaltyFrom
-                ? `<div class="cell-note">${mmdd(score.penaltyFrom)} 선정<br>${score.penaltyWeeksAgo}주 전</div>`
-                : '<div class="cell-note">최근 선정 없음</div>'}
+                ? `<div class="cell-note">won ${mmdd(score.penaltyFrom)}<br>${score.penaltyWeeksAgo} weeks ago</div>`
+                : '<div class="cell-note">no recent win</div>'}
             </td>
             <td>
               ${fmtScore(score.bonus)}
               ${score.streak > 1
-                ? `<div class="cell-note">${score.streak}주 연속<br>후보 등록</div>`
-                : '<div class="cell-note">연속 아님</div>'}
+                ? `<div class="cell-note">${score.streak} weeks<br>in a row</div>`
+                : '<div class="cell-note">no streak</div>'}
             </td>
             <td>${fmtScore(score.total)}</td>
             <td>
-              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} 후보 평가 +">+</button>
-              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} 후보 평가 −">−</button>
+              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review +">+</button>
+              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review −">−</button>
             </td>
             <td><input type="checkbox" data-action="toggleWinner" data-id="${kid.id}" ${state.winnerIds.has(kid.id) ? 'checked' : ''}></td>
           </tr>`).join('')}
@@ -1299,20 +1300,20 @@ function renderRuleSummary() {
   const per = state.settings.streakBonus || 0;
 
   const decay = [];
-  for (let w = 1; w <= N; w++) decay.push(`${w}주전 −${N - w + 1}`);
+  for (let w = 1; w <= N; w++) decay.push(`${w}w ago −${N - w + 1}`);
 
   const streak = (cap >= 2 && per > 0)
-    ? `2주 연속 +${fmtNum(per)} → ${cap}주 연속 +${fmtNum((cap - 1) * per)} (${cap}주까지)`
-    : '사용 안 함';
+    ? `2 weeks +${fmtNum(per)} → ${cap} weeks +${fmtNum((cap - 1) * per)} (capped at ${cap})`
+    : 'off';
 
   return `
     <details class="rule-summary" ${state.ruleSummaryOpen ? 'open' : ''}>
-      <summary data-action="toggleRuleSummary">점수 규칙 (${state.currentWeekDate} 기준)</summary>
-      <div><b>감점(자동)</b> — 최근 선정된 아이: ${decay.join(' · ')} · ${N + 1}주 이상 지나면 0<br>
-      여러 번 뽑혔으면 <b>가장 최근</b> 것 하나만 적용됩니다.</div>
-      <div style="margin-top:6px"><b>가점(연속)</b> — ${streak}<br>
-      기록이 있는 주 기준이라 예배가 없던 주는 연속이 끊기지 않습니다.</div>
-      <div style="margin-top:6px"><b>수동점수</b> — ± 버튼으로 준 점수. 이 주에만 반영됩니다.</div>
+      <summary data-action="toggleRuleSummary">Scoring rules (as of ${state.currentWeekDate})</summary>
+      <div><b>Penalty</b> — for a recent winner: ${decay.join(' · ')} · nothing after ${N + 1} weeks<br>
+      Won more than once? Only the <b>most recent</b> counts.</div>
+      <div style="margin-top:6px"><b>Streak</b> — ${streak}<br>
+      Counted over weeks on record, so a cancelled service doesn't break it.</div>
+      <div style="margin-top:6px"><b>Points</b> — given with ±, counting for this week only.</div>
     </details>`;
 }
 
@@ -1325,7 +1326,7 @@ function stepWinnerCount(delta) {
 function autoSelectWinners() {
   const saved = savedWeek();
   if (!saved || saved.candidateIds.length === 0) {
-    showToast('먼저 "등록후보" 탭에서 후보를 저장해주세요.');
+    showToast('Save the nominees on the Nominees tab first.');
     return;
   }
   const n = state.winnerCount;
@@ -1334,12 +1335,12 @@ function autoSelectWinners() {
     .sort((a, b) => b.total - a.total);
   state.winnerIds = new Set(scored.slice(0, n).map(x => x.id));
   renderCandidateScoreTable();
-  showToast(`점수 상위 ${Math.min(n, scored.length)}명을 선정했습니다. 확인 후 "선정 저장"을 눌러주세요.`);
+  showToast(`Top ${Math.min(n, scored.length)} selected. Check them, then press Save winners.`);
 }
 
-/** 등록후보 tab save — records who is running, keeping any winners intact. */
+/** Nominees save — records who is running, keeping any winners intact. */
 async function saveCandidates() {
-  if (state.candidateIds.size === 0) { showToast('후보자를 1명 이상 선택해주세요.'); return; }
+  if (state.candidateIds.size === 0) { showToast('Select at least one nominee.'); return; }
   const existing = savedWeek();
   const candidateIds = [...state.candidateIds];
 
@@ -1350,9 +1351,9 @@ async function saveCandidates() {
   if (droppedWinners.length > 0) {
     const names = droppedWinners.map(id => kidById(id).name).join(', ');
     const ok = confirm(
-      `${names} 은(는) ${state.currentWeekDate} 의 Best Worshiper로 선정되어 있습니다.\n\n` +
-      `후보에서 빼면 이 주의 선정에서도 함께 제외되고, 이후 감점 계산에서도 빠집니다.\n\n` +
-      `계속할까요?`
+      `${names} already won Best Worshiper on ${state.currentWeekDate}.\n\n` +
+      `Dropping them from the nominees also removes that win, and the penalty that follows from it.\n\n` +
+      `Continue?`
     );
     if (!ok) return;
   }
@@ -1368,14 +1369,14 @@ async function saveCandidates() {
   await loadAll();
   loadWeekForDate(state.currentWeekDate);
   renderCandidatesTab();
-  showToast(`후보 ${candidateIds.length}명을 저장했습니다. "이번주 선정" 탭에서 점수를 매기세요.`);
+  showToast(`Saved ${candidateIds.length} nominees. Score them on the This Week tab.`);
 }
 
-/** 이번주 선정 tab save — records the winners chosen from the saved roster. */
+/** This Week save — records the winners chosen from the saved roster. */
 async function saveWeek() {
   const existing = savedWeek();
   if (!existing || existing.candidateIds.length === 0) {
-    showToast('먼저 "등록후보" 탭에서 후보를 저장해주세요.');
+    showToast('Save the nominees on the Nominees tab first.');
     return;
   }
   const rec = {
@@ -1389,19 +1390,19 @@ async function saveWeek() {
   loadWeekForDate(state.currentWeekDate);
   renderWeekTab();
   showToast(rec.winnerIds.length > 0
-    ? `${rec.winnerIds.length}명을 Best Worshiper로 저장했습니다.`
-    : '선정 없이 저장했습니다.');
+    ? `Saved ${rec.winnerIds.length} Best Worshiper(s).`
+    : 'Saved with no winners.');
 }
 
 async function deleteWeek() {
   const existing = savedWeek();
   if (!existing) return;
-  if (!confirm(`${state.currentWeekDate} 기록(후보 ${existing.candidateIds.length}명, 선정 ${existing.winnerIds.length}명)을 삭제할까요?`)) return;
+  if (!confirm(`Delete the ${state.currentWeekDate} record (${existing.candidateIds.length} nominees, ${existing.winnerIds.length} winners)?`)) return;
   await dbDelete('weeks', existing.id);
   await loadAll();
   loadWeekForDate(state.currentWeekDate);
   renderCandidatesTab();
-  showToast('삭제되었습니다.');
+  showToast('Deleted.');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1422,7 +1423,7 @@ function renderKidsTab() {
   );
 
   if (kids.length === 0) {
-    grid.innerHTML = '<div class="hint">등록된 아이가 없습니다.</div>';
+    grid.innerHTML = '<div class="hint">No children yet.</div>';
     return;
   }
 
@@ -1430,17 +1431,17 @@ function renderKidsTab() {
     const score = computeScore(k.id, todayStr());
     return `
     <div class="kid-card ${k.active ? '' : 'inactive'}">
-      ${k.active ? '' : '<div class="kid-card-flag">비활성</div>'}
+      ${k.active ? '' : '<div class="kid-card-flag">inactive</div>'}
       ${isPriority ? `<div class="kid-card-order">${i + 1}</div>` : ''}
       ${mediaThumbHTML(k, 'kid-card-media')}
       <div class="kid-card-name">${escapeHtml(k.name)}</div>
-      <div class="kid-card-score">총점 ${fmtScore(score.total)}</div>
+      <div class="kid-card-score">total ${fmtScore(score.total)}</div>
       <div class="kid-card-actions">
         ${isPriority ? `
-          <button class="mini-btn" data-action="moveKid" data-id="${k.id}" data-dir="-1" title="위로">▲</button>
-          <button class="mini-btn" data-action="moveKid" data-id="${k.id}" data-dir="1" title="아래로">▼</button>` : ''}
-        <button class="btn small" data-action="editKid" data-id="${k.id}">수정</button>
-        <button class="btn small danger" data-action="deleteKid" data-id="${k.id}">삭제</button>
+          <button class="mini-btn" data-action="moveKid" data-id="${k.id}" data-dir="-1" title="Move up">▲</button>
+          <button class="mini-btn" data-action="moveKid" data-id="${k.id}" data-dir="1" title="Move down">▼</button>` : ''}
+        <button class="btn small" data-action="editKid" data-id="${k.id}">Edit</button>
+        <button class="btn small danger" data-action="deleteKid" data-id="${k.id}">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -1459,7 +1460,7 @@ function openKidModal(kidId) {
 
   if (kidId) {
     const k = kidById(kidId);
-    title.textContent = '아이 정보 수정';
+    title.textContent = 'Edit child';
     nameInput.value = k.name;
     activeRow.classList.remove('hidden');
     activeInput.checked = k.active;
@@ -1473,7 +1474,7 @@ function openKidModal(kidId) {
       preview.innerHTML = '🧒';
     }
   } else {
-    title.textContent = '아이 추가';
+    title.textContent = 'Add child';
     nameInput.value = '';
     activeRow.classList.add('hidden');
     activeInput.checked = true;
@@ -1514,7 +1515,7 @@ function handleKidMediaRemove() {
 
 async function saveKid() {
   const name = document.getElementById('kid-name-input').value.trim();
-  if (!name) { showToast('이름을 입력해주세요.'); return; }
+  if (!name) { showToast('Enter a name.'); return; }
   const active = document.getElementById('kid-active-input').checked;
 
   if (state.editingKidId) {
@@ -1532,27 +1533,27 @@ async function saveKid() {
   await loadAll();
   closeKidModal();
   renderKidsTab();
-  showToast('저장되었습니다.');
+  showToast('Saved.');
 }
 
 async function deleteKid(kidId) {
   const k = kidById(kidId);
   const usedInHistory = state.weeks.some(w => w.candidateIds.includes(kidId) || w.winnerIds.includes(kidId));
   if (usedInHistory) {
-    if (!confirm(`"${k.name}"은(는) 히스토리 기록이 있습니다. 완전히 삭제하면 히스토리에서 "(삭제된 아이)"로 표시됩니다.\n대신 "비활성화"만 하시겠습니까?\n\n확인 = 비활성화만 함 / 취소 = 다음 안내로`)) {
-      if (!confirm(`정말로 "${k.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(`"${k.name}" appears in past records. Deleting outright leaves them as "(removed)" there.\nMark them inactive instead?\n\nOK = inactive only / Cancel = go on to delete`)) {
+      if (!confirm(`Permanently delete "${k.name}"? This cannot be undone.`)) return;
       await dbDelete('kids', kidId);
       state.points.filter(p => p.kidId === kidId).forEach(p => dbDelete('points', p.id));
     } else {
       await dbPut('kids', { ...k, active: false });
     }
   } else {
-    if (!confirm(`"${k.name}"을(를) 삭제할까요?`)) return;
+    if (!confirm(`Delete "${k.name}"?`)) return;
     await dbDelete('kids', kidId);
   }
   await loadAll();
   renderKidsTab();
-  showToast('처리되었습니다.');
+  showToast('Done.');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1568,7 +1569,7 @@ function renderHistoryTab() {
   });
 
   if (filtered.length === 0) {
-    box.innerHTML = '<div class="hint">기록이 없습니다.</div>';
+    box.innerHTML = '<div class="hint">No records.</div>';
     return;
   }
 
@@ -1590,13 +1591,13 @@ function renderHistoryTab() {
     return `
     <div class="history-item">
       <div class="history-date">${w.date}</div>
-      <div class="history-summary hint">후보 ${w.candidateIds.length}명 · 선정 ${w.winnerIds.length}명</div>
+      <div class="history-summary hint">${w.candidateIds.length} nominees · ${w.winnerIds.length} chosen</div>
       <div class="history-actions">
-        <button class="btn small" data-action="editWeek" data-week="${w.date}">수정</button>
-        <button class="btn small danger" data-action="deleteHistoryWeek" data-id="${w.id}" data-week="${w.date}">삭제</button>
+        <button class="btn small" data-action="editWeek" data-week="${w.date}">Edit</button>
+        <button class="btn small danger" data-action="deleteHistoryWeek" data-id="${w.id}" data-week="${w.date}">Delete</button>
       </div>
       <div class="history-chips">
-        ${chips || '<span class="hint">후보 없음</span>'}
+        ${chips || '<span class="hint">no nominees</span>'}
       </div>
     </div>`;
   }).join('');
@@ -1622,23 +1623,23 @@ function buildHistoryText() {
   });
 
   return [
-    `# bestWorshiper 기록  (${todayStr()} 기준, 총 ${weeks.length}주)`,
+    `# bestWorshiper records  (as of ${todayStr()}, ${weeks.length} weeks)`,
     '#',
-    '# 한 줄에 한 주씩 적습니다. 적힌 이름은 모두 그 주의 후보이고,',
-    '# 이름 뒤에 *를 붙이면 그 아이가 Best Worshiper로 선정된 것입니다.',
+    '# One line per week. Every name listed was nominated that week,',
+    '# and a * after a name means that child was chosen as Best Worshiper.',
     '#',
     '#   2026-08-09, 김하온*, 한태수*, 성다민, 김서은',
-    '#   → 후보 4명 중 김하온·한태수가 선정',
+    '#   -> 4 nominated, 김하온 and 한태수 chosen',
     '#',
-    '# · 전부 선정: 모든 이름에 *를 붙입니다.',
-    '#   예) 2026-08-09, 가온*, 나온*, 다온*',
-    '# · 전부 미선정(후보만 등록): *를 하나도 붙이지 않습니다.',
-    '#   예) 2026-08-09, 가온, 나온, 다온',
-    '#   단, 글 전체에 *가 하나도 없으면 어느 쪽인지 알 수 없어 가져올 때 물어봅니다.',
-    '# · 날짜는 2026-08-09 / 2026.08.09 / 08-09 모두 인식합니다.',
-    '#   (연도를 생략하면 오늘에 가장 가까운 지난 날짜로 봅니다)',
-    '# · 명단에 없는 이름은 가져올 때 자동으로 새 아이로 추가됩니다.',
-    '# · # 으로 시작하는 줄과 빈 줄은 무시됩니다.',
+    '# · All chosen: put a * on every name.',
+    '#   e.g. 2026-08-09, 가온*, 나온*, 다온*',
+    '# · None chosen (nominated only): leave every * off.',
+    '#   e.g. 2026-08-09, 가온, 나온, 다온',
+    '#   If no * appears anywhere, either reading is possible, so importing asks.',
+    '# · Dates may be written 2026-08-09 / 2026.08.09 / 08-09.',
+    '#   (Without a year, the most recent past date is assumed.)',
+    '# · Unknown names are added as new children on import.',
+    '# · Blank lines and lines starting with # are ignored.',
     '',
     ...lines,
   ].join('\n');
@@ -1691,7 +1692,7 @@ function parseHistoryText(text, starlessMeansWinners = false) {
 
     const lineNo = i + 1;
 
-    // Labelled form is pipe-separated; the legacy form is "날짜, 이름, 이름",
+    // Labelled form is pipe-separated; the legacy form is "date, name, name",
     // where only the first comma separates the date from the names.
     let segments;
     if (raw.includes('|')) {
@@ -1704,8 +1705,8 @@ function parseHistoryText(text, starlessMeansWinners = false) {
     }
 
     const date = parseFlexibleDate(segments[0]);
-    if (!date) { errors.push(`${lineNo}행: 날짜를 알 수 없습니다 — "${raw.slice(0, 30)}"`); return; }
-    if (seen.has(date)) { errors.push(`${lineNo}행: ${date} 가 중복되어 무시했습니다.`); return; }
+    if (!date) { errors.push(`line ${lineNo}: no date found — "${raw.slice(0, 30)}"`); return; }
+    if (seen.has(date)) { errors.push(`line ${lineNo}: ${date} is a duplicate, skipped.`); return; }
 
     const splitNames = s => s.split(',').map(n => n.trim()).filter(Boolean);
     const stripStar = n => n.replace(/\s*\*+$/, '').trim();
@@ -1714,7 +1715,7 @@ function parseHistoryText(text, starlessMeansWinners = false) {
     let winners = [];
 
     if (segments.length === 1) {
-      errors.push(`${lineNo}행: 이름이 없습니다 — "${raw.slice(0, 30)}"`);
+      errors.push(`line ${lineNo}: no names — "${raw.slice(0, 30)}"`);
       return;
     }
 
@@ -1729,7 +1730,7 @@ function parseHistoryText(text, starlessMeansWinners = false) {
     }
 
     if (!labelled) {
-      // "날짜, 이름*, 이름" — everyone listed is a candidate, a trailing star
+      // "date, name*, name" — everyone listed is a candidate, a trailing star
       // marks the chosen. Without stars anywhere, fall back to the older
       // reading where the listed names are the winners.
       const entries = splitNames(segments.slice(1).join(','));
@@ -1746,7 +1747,7 @@ function parseHistoryText(text, starlessMeansWinners = false) {
     for (const n of winners) if (!candidates.includes(n)) candidates.push(n);
 
     if (candidates.length === 0) {
-      errors.push(`${lineNo}행: ${date} 에 이름이 없어 건너뛰었습니다.`);
+      errors.push(`line ${lineNo}: ${date} has no names, skipped.`);
       return;
     }
 
@@ -1767,21 +1768,21 @@ async function applyHistoryText(text, starlessMeansWinners) {
     } else {
       const probe = parseHistoryText(text, false);
       if (probe.weeks.length === 0) {
-        alert('읽을 수 있는 기록이 없습니다.\n\n' + (probe.errors.join('\n') || '내용을 확인해주세요.'));
+        alert('Nothing readable found.\n\n' + (probe.errors.join('\n') || 'Please check the text.'));
         return;
       }
       starlessMeansWinners = confirm(
-        '이 글에는 * 표시가 없습니다. 적힌 이름을 어떻게 볼까요?\n\n' +
-        '[확인] 전원 선정 — 적힌 아이들이 그 주에 뽑힌 것 (예전 형식)\n' +
-        '[취소] 전원 후보 — 후보로만 등록하고 아직 선정 전\n\n' +
-        `총 ${probe.weeks.length}주에 적용됩니다.`
+        'This text has no * marks. How should the names be read?\n\n' +
+        '[OK] All chosen — everyone listed won that week (older format)\n' +
+        '[Cancel] All nominated — listed only, not yet judged\n\n' +
+        `Applies to ${probe.weeks.length} weeks.`
       );
     }
   }
 
   const { weeks, errors } = parseHistoryText(text, starlessMeansWinners);
   if (weeks.length === 0) {
-    alert('읽을 수 있는 기록이 없습니다.\n\n' + (errors.join('\n') || '내용을 확인해주세요.'));
+    alert('Nothing readable found.\n\n' + (errors.join('\n') || 'Please check the text.'));
     return;
   }
 
@@ -1791,12 +1792,12 @@ async function applyHistoryText(text, starlessMeansWinners) {
 
   const totalWinners = weeks.reduce((s, w) => s + w.winners.length, 0);
   const summary =
-    `${weeks.length}주 기록을 가져옵니다.\n` +
-    `· 기간: ${weeks[weeks.length - 1].date} ~ ${weeks[0].date}\n` +
-    `· 선정 ${totalWinners}건 / 후보 ${weeks.reduce((s, w) => s + w.candidates.length, 0)}건\n` +
-    `· 새로 추가될 아이: ${newNames.length}명${newNames.length ? ' (' + newNames.slice(0, 8).join(', ') + (newNames.length > 8 ? ' 외' : '') + ')' : ''}\n` +
-    (errors.length ? `\n⚠ 건너뛴 줄 ${errors.length}개:\n${errors.slice(0, 5).join('\n')}\n` : '') +
-    `\n같은 날짜의 기존 기록은 덮어씁니다. 계속할까요?`;
+    `Importing ${weeks.length} weeks.\n` +
+    `· Range: ${weeks[weeks.length - 1].date} ~ ${weeks[0].date}\n` +
+    `· ${totalWinners} chosen / ${weeks.reduce((s, w) => s + w.candidates.length, 0)} nominations\n` +
+    `· New children: ${newNames.length}${newNames.length ? ' (' + newNames.slice(0, 8).join(', ') + (newNames.length > 8 ? ' and more' : '') + ')' : ''}\n` +
+    (errors.length ? `\n⚠ ${errors.length} line(s) skipped:\n${errors.slice(0, 5).join('\n')}\n` : '') +
+    `\nExisting records on the same dates are replaced. Continue?`;
 
   if (!confirm(summary)) return;
 
@@ -1824,7 +1825,7 @@ async function applyHistoryText(text, starlessMeansWinners) {
   loadWeekForDate(state.currentWeekDate);
   closeTextExportModal();
   refreshAllTabs();
-  showToast(`${weeks.length}주 기록을 가져왔습니다.${newNames.length ? ` 아이 ${newNames.length}명 추가.` : ''}`);
+  showToast(`Imported ${weeks.length} weeks.${newNames.length ? ` ${newNames.length} new children.` : ''}`);
 }
 
 function openTextExportModal() {
@@ -1838,11 +1839,11 @@ async function copyHistoryText() {
   const area = document.getElementById('text-export-area');
   try {
     await navigator.clipboard.writeText(area.value);
-    showToast('클립보드에 복사되었습니다.');
+    showToast('Copied to clipboard.');
   } catch (e) {
     area.select();
     document.execCommand('copy');
-    showToast('클립보드에 복사되었습니다.');
+    showToast('Copied to clipboard.');
   }
 }
 function downloadHistoryText() {
@@ -1854,11 +1855,11 @@ function downloadHistoryText() {
 }
 
 async function deleteHistoryWeek(id, dateStr) {
-  if (!confirm(`${dateStr} 기록을 삭제할까요?`)) return;
+  if (!confirm(`Delete the ${dateStr} record?`)) return;
   await dbDelete('weeks', id);
   await loadAll();
   renderHistoryTab();
-  showToast('삭제되었습니다.');
+  showToast('Deleted.');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1868,7 +1869,7 @@ async function quickPoint(kidId, delta, date, reason) {
   await dbAdd('points', {
     kidId,
     delta,
-    reason: reason || (delta > 0 ? '빠른 +점수' : '빠른 -점수'),
+    reason: reason || (delta > 0 ? 'quick +' : 'quick −'),
     date: date || todayStr(),
   });
   await loadAll();
@@ -1888,7 +1889,7 @@ function renderDestination() {
   card.classList.remove('hidden');
   let name = '';
   try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
-  document.getElementById('destination-name').textContent = name || '지정 안 됨 (공유로 내보냄)';
+  document.getElementById('destination-name').textContent = name || 'Not set (export will share)';
 }
 
 window.onDestinationPicked = () => {
@@ -1911,12 +1912,12 @@ function renderStreakPreview() {
   const per = state.streakBonusDraft;
   const el = document.getElementById('streak-preview');
   if (cap < 2 || per === 0) {
-    el.textContent = '지금 설정에서는 연속 가점이 적용되지 않습니다.';
+    el.textContent = 'No streak bonus with the current settings.';
     return;
   }
   const parts = [];
-  for (let w = 2; w <= cap; w++) parts.push(`${w}주 연속 +${fmtNum((w - 1) * per)}점`);
-  el.textContent = `현재 설정: ${parts.join(' · ')} (${cap}주 이상은 +${fmtNum((cap - 1) * per)}점으로 동일)`;
+  for (let w = 2; w <= cap; w++) parts.push(`${w} weeks +${fmtNum((w - 1) * per)}`);
+  el.textContent = `Now: ${parts.join(' · ')} (${cap}+ weeks stays at +${fmtNum((cap - 1) * per)})`;
 }
 
 function stepDecayWeeks(delta) {
@@ -1948,7 +1949,7 @@ async function saveSettings() {
   await dbPut('settings', { key: 'streakWeeks', value: state.streakWeeksDraft });
   await dbPut('settings', { key: 'streakBonus', value: state.streakBonusDraft });
   await loadAll();
-  showToast('설정이 저장되었습니다.');
+  showToast('Settings saved.');
   refreshAllTabs();
 }
 
@@ -1999,14 +2000,14 @@ function saveToDevice(fileName, text, mimeType) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast('내보내기 완료.');
+  showToast('Exported.');
 }
 
 async function importData(file) {
   const text = await file.text();
   let data;
-  try { data = JSON.parse(text); } catch (e) { showToast('올바른 JSON 파일이 아닙니다.'); return; }
-  if (!confirm('가져오기를 하면 현재 데이터를 모두 덮어씁니다. 계속할까요?')) return;
+  try { data = JSON.parse(text); } catch (e) { showToast('Not a valid JSON file.'); return; }
+  if (!confirm('Importing replaces everything currently stored. Continue?')) return;
 
   await dbClear('kids'); await dbClear('weeks'); await dbClear('points'); await dbClear('settings');
 
@@ -2033,34 +2034,34 @@ async function importData(file) {
   }
   await loadAll();
   refreshAllTabs();
-  showToast('가져오기 완료.');
+  showToast('Imported.');
 }
 
 async function checkForUpdate() {
-  showToast('업데이트 확인 중...');
+  showToast('Checking for updates...');
   try {
     const resp = await fetch('bestWorshiper.html?checkver=' + Date.now(), { cache: 'no-store' });
     const text = await resp.text();
     const m = text.match(/const APP_VERSION = '([^']+)'/);
     const latest = m ? m[1] : null;
-    if (!latest) { showToast('버전을 확인할 수 없습니다.'); return; }
-    if (latest === APP_VERSION) { showToast(`최신 버전입니다 (v${APP_VERSION})`); return; }
-    if (!confirm(`새 버전 v${latest} 이 있습니다. (현재 v${APP_VERSION})\n지금 업데이트할까요? 저장된 데이터는 유지됩니다.`)) return;
+    if (!latest) { showToast('Could not read the version.'); return; }
+    if (latest === APP_VERSION) { showToast(`Up to date (v${APP_VERSION})`); return; }
+    if (!confirm(`Version v${latest} is available (you have v${APP_VERSION}).\nUpdate now? Saved data is kept.`)) return;
     for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
     for (const k of await caches.keys()) await caches.delete(k);
     location.reload(true);
   } catch (e) {
-    showToast('업데이트 확인 실패: 인터넷 연결을 확인해주세요.');
+    showToast('Update check failed — check your connection.');
   }
 }
 
 async function resetAllData() {
-  if (!confirm('정말로 모든 데이터를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')) return;
-  if (!confirm('마지막 확인입니다. 백업을 먼저 하셨나요? 계속 진행할까요?')) return;
+  if (!confirm('Erase all data? This cannot be undone.')) return;
+  if (!confirm('Last check — have you exported a backup? Continue?')) return;
   await dbClear('kids'); await dbClear('weeks'); await dbClear('points');
   await loadAll();
   refreshAllTabs();
-  showToast('초기화되었습니다.');
+  showToast('All data erased.');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2473,7 +2474,7 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast('PPT를 저장했습니다.');
+  showToast('PPT saved.');
 }
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -2487,12 +2488,12 @@ function destinationSubPath(dateStr) {
 async function exportAwardPptx() {
   const saved = savedWeek();
   if (!saved || saved.winnerIds.length === 0) {
-    showToast('먼저 Best Worshiper를 선정하고 저장해주세요.');
+    showToast('Choose and save this week\'s Best Worshipers first.');
     return;
   }
   const btn = document.getElementById('pptx-btn');
   btn.disabled = true;
-  btn.textContent = '만드는 중...';
+  btn.textContent = 'Building...';
   try {
     const bytes = await buildAwardPptx();
     const stamp = state.currentWeekDate.replace(/-/g, '');
@@ -2510,20 +2511,20 @@ async function exportAwardPptx() {
       : 'no-destination';
 
     if (problem === '') {
-      showToast(`${sub} 에 저장했습니다.`);
+      showToast(`Saved to ${sub}.`);
     } else if (problem === 'no-destination') {
       // Nowhere to file it yet — hand it straight to the share sheet.
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
     } else {
-      showToast('폴더 저장 실패(' + problem + ') — 공유로 보냅니다.');
+      showToast('Could not save to the folder (' + problem + ') — sharing instead.');
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
     }
   } catch (e) {
     console.error(e);
-    showToast('PPT 생성에 실패했습니다: ' + e.message);
+    showToast('PPT export failed: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '📊 PPT 내보내기';
+    btn.textContent = '📊 Export PPT';
   }
 }
 
@@ -2544,7 +2545,7 @@ function ceremonySteps() { return 2 + ceremony.winners.length * 2; }
 function openCeremony() {
   const saved = savedWeek();
   if (!saved || saved.winnerIds.length === 0) {
-    showToast('먼저 Best Worshiper를 선정하고 저장해주세요.');
+    showToast('Choose and save this week\'s Best Worshipers first.');
     return;
   }
   ceremony.winners = saved.winnerIds.map(id => kidById(id));
@@ -2710,11 +2711,18 @@ function playFanfare() {
   });
 }
 
+/** True while a drumroll step is on screen. */
+function ceremonyIsSuspense() {
+  const step = ceremony.step;
+  if (step <= 0 || step >= ceremonySteps() - 1) return false;
+  return (step - 1) % 2 === 0;
+}
+
 function toggleCeremonySound() {
   ceremony.sound = !ceremony.sound;
   document.getElementById('ceremony-sound').textContent = ceremony.sound ? '🔊' : '🔇';
   if (!ceremony.sound) stopDrum();
-  else if (document.getElementById('ceremony-hint').textContent.includes('공개')) startDrum();
+  else if (ceremonyIsSuspense()) startDrum();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2835,7 +2843,7 @@ document.getElementById('text-import-input').addEventListener('change', async e 
   e.target.value = '';
   if (!f) return;
   document.getElementById('text-export-area').value = await f.text();
-  showToast('파일을 불러왔습니다. 내용 확인 후 "적용"을 눌러주세요.');
+  showToast('File loaded. Review it, then press Apply.');
 });
 
 document.getElementById('settings-save-btn').addEventListener('click', saveSettings);
@@ -2885,11 +2893,11 @@ document.addEventListener('change', e => {
   const id = Number(t.dataset.id);
   if (action === 'toggleCandidate') {
     // Ticking a box only edits the draft roster; it reaches the scoring screen
-    // once "후보 저장" is pressed.
+    // once "Save nominees" is pressed.
     if (t.checked) state.candidateIds.add(id);
     else { state.candidateIds.delete(id); state.winnerIds.delete(id); }
     document.getElementById('candidate-count-label').textContent =
-      `선택 ${state.candidateIds.size}명 / 표시 ${document.querySelectorAll('#candidate-list input[type=checkbox]').length}명 · 저장 필요`;
+      `${state.candidateIds.size} selected / ${document.querySelectorAll('#candidate-list input[type=checkbox]').length} shown · unsaved`;
   }
   if (action === 'toggleWinner') {
     if (t.checked) state.winnerIds.add(id);
@@ -2913,7 +2921,7 @@ const IS_ANDROID_APP = !!(window.AndroidBridge && window.AndroidBridge.saveFile)
     document.getElementById('install-guide-card').classList.add('hidden');
     document.getElementById('update-check-row').classList.add('hidden');
     document.getElementById('update-hint').textContent =
-      '안드로이드 앱으로 설치되어 있습니다. 새 버전은 새 APK 파일을 설치하면 적용되며, 저장된 데이터는 유지됩니다.';
+      'Installed as an Android app. A new version arrives as a new APK; saved data is kept.';
   }
 
   await loadAll();
