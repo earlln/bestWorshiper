@@ -28,7 +28,12 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
+      # The runner image already ships the Android SDK; android-actions/setup-android
+      # fails here trying to install the retired 'tools' package.
+      - name: Locate the Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
 
       - name: Restore the signing key
         id: keystore
@@ -67,13 +72,24 @@ jobs:
           echo "path=$out" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Report the signing certificate
+      - name: Check the APK carries the expected signing certificate
         if: steps.keystore.outputs.signed == 'true'
-        # Print the fingerprint so a key swap is visible here rather than as a
-        # failed install on someone's phone.
+        # An APK signed with a different key cannot install over the one people
+        # already have; they would have to uninstall first and lose their data.
+        # The expected fingerprint is read from the released v2.0.0 APK.
         run: |
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs \
-            "${{ steps.apk.outputs.path }}" | grep -i 'SHA-256' || true
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          got=$("$apksigner" verify --print-certs "${{ steps.apk.outputs.path }}" \
+                | grep -oiP 'certificate SHA-256 digest:\s*\K[0-9a-f]+' | head -1)
+          want=$(tr -d '[:space:]' < android/release-cert-sha256.txt)
+          echo "built    : $got"
+          echo "expected : $want"
+          if [ "$got" != "$want" ]; then
+            echo "::error::서명 키가 다릅니다. 이 APK 는 기존 앱 위에 설치되지 않습니다."
+            echo "::error::의도한 키 교체라면 android/release-cert-sha256.txt 를 새 지문으로 고치세요."
+            exit 1
+          fi
+          echo "서명 키 일치"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -18,19 +18,43 @@ APK 빌드와 릴리즈는 `.github/workflows/android.yml` 이 합니다.
 | 키 별칭(alias) | `androiddebugkey` |
 | 키 암호 | `android` |
 
-### 키가 맞는지 먼저 확인하세요
+### 어떤 키였는지는 이미 확인했습니다
 
-기존에 배포한 APK 를 내려받아 지문을 비교합니다. **두 SHA-256 이 같아야 합니다.**
+배포된 v2.0.0 APK 의 서명 인증서를 열어본 결과입니다.
 
-```powershell
-# 배포된 APK 의 인증서
-keytool -printcert -jarfile bestWorshiper-v2.0.0.apk
-
-# 내 키스토어의 인증서
-keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -storepass android
+```
+subject  : CN = Android Debug, O = Android, C = US
+발급      : 2026-05-23
+SHA-256  : 3D:CF:9C:26:4B:5E:1C:62:F6:AC:18:76:08:FE:B8:8F:
+           EC:A3:25:23:12:02:29:41:74:7D:2C:07:7A:DB:F5:6A
 ```
 
-다르면 그 키로는 업데이트가 안 됩니다. 올바른 키스토어를 찾은 뒤 진행하세요.
+안드로이드 빌드 도구가 자동으로 만드는 **디버그 키스토어**입니다. Android Studio
+뿐 아니라 명령줄 gradle 빌드도 이 파일을 자동 생성하므로, **2026-05-23 에 이
+앱을 처음 빌드한 그 컴퓨터**의 아래 경로에 있습니다.
+
+| OS | 경로 |
+|---|---|
+| Windows | `%USERPROFILE%\.android\debug.keystore` |
+| macOS / Linux | `~/.android/debug.keystore` |
+
+암호는 디버그 키스토어 표준값입니다: 키스토어 `android`, 별칭
+`androiddebugkey`, 키 `android`.
+
+이 지문은 `android/release-cert-sha256.txt` 에 적혀 있고, CI 가 빌드한 APK 와
+대조해 **다르면 릴리즈를 중단합니다.** 그래서 손으로 확인하지 않아도 잘못된 키로
+배포될 일은 없습니다. 시크릿만 등록하고 빌드를 한 번 돌려보면 됩니다.
+
+### 키스토어를 못 찾으면
+
+그 컴퓨터가 없거나 파일이 사라졌다면 **같은 키로 서명할 방법이 없습니다.**
+새 키로 낸 APK 는 기존 앱 위에 설치되지 않으므로, 사용자는
+
+1. 앱에서 **설정 ▸ 내보내기** 로 백업 파일을 먼저 받고,
+2. 앱을 지운 뒤 새 APK 를 설치하고,
+3. **가져오기** 로 백업을 복원해야
+
+합니다. 이 경우 `android/release-cert-sha256.txt` 를 새 키의 지문으로 바꿔주세요.
 
 ## 시크릿 등록 (한 번만)
 
