@@ -674,20 +674,21 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
       <div class="card hidden" id="destination-card">
         <h3>📁 PPT file</h3>
-        <p class="hint">Pick the deck file once — <code>BestWorshiper.pptx</code> next to the service deck —
-        and every export rewrites that same file, so the service deck's link keeps finding the
-        new week.<br>
-        No file there yet? <b>Create new file</b> makes it in the folder you choose.</p>
+        <p class="hint"><b>Choose folder</b> and pick where the deck lives (e.g. OneDrive › EM › Service).
+        The first export creates <code>BestWorshiper.pptx</code> there and every later export
+        rewrites that same file, so the service deck's link keeps finding the new week.<br>
+        Make sure the folder holds no <code>BestWorshiper.pptx</code> before the first export —
+        OneDrive would file a clash as <code>BestWorshiper 1.pptx</code>.</p>
         <div class="setting-row">
-          <div class="setting-key">Current file</div>
+          <div class="setting-key">Exports go to</div>
           <div><b id="destination-name">Not set</b></div>
         </div>
         <div class="row-actions">
-          <button id="destination-pick-btn" class="btn accent">Choose existing file</button>
-          <button id="destination-create-btn" class="btn">Create new file</button>
+          <button id="destination-folder-btn" class="btn accent">Choose folder</button>
+          <button id="destination-pick-btn" class="btn">Choose existing file</button>
           <button id="destination-clear-btn" class="btn">Clear</button>
         </div>
-        <p class="hint" style="margin-top:8px">With no file set, exporting opens the share sheet instead. Install the OneDrive app and it appears in the picker.</p>
+        <p class="hint" style="margin-top:8px">With nothing set, exporting opens the share sheet instead. Install the OneDrive app and it appears in the picker.</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -735,7 +736,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.3.1';
+const APP_VERSION = '2.3.2';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1890,7 +1891,6 @@ function renderDestination() {
     return;
   }
   card.classList.remove('hidden');
-  document.getElementById('destination-create-btn').hidden = !window.AndroidBridge.createDestination;
   let name = '';
   try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
   document.getElementById('destination-name').textContent = name || 'Not set (export will share)';
@@ -3129,8 +3129,8 @@ document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
 document.getElementById('destination-pick-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.pickDestination) window.AndroidBridge.pickDestination();
 });
-document.getElementById('destination-create-btn').addEventListener('click', () => {
-  if (IS_ANDROID_APP && window.AndroidBridge.createDestination) window.AndroidBridge.createDestination(AWARD_PPTX_NAME);
+document.getElementById('destination-folder-btn').addEventListener('click', () => {
+  if (IS_ANDROID_APP && window.AndroidBridge.pickDestinationFolder) window.AndroidBridge.pickDestinationFolder();
 });
 document.getElementById('destination-clear-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.clearDestination) {
