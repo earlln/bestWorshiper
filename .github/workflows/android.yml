@@ -1,0 +1,94 @@
+name: Android
+
+# A tag builds the APK and publishes it as a release; pushes and manual runs
+# just build, so a broken Gradle file is caught before release day.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the three version strings agree
+        run: ./tools/check_version.sh "${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Restore the signing key
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 가 없습니다 — 서명하지 않고 빌드합니다."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build the release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.keystore.outputs.signed == 'true' && format('{0}/release.keystore', runner.temp) || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # The repo carries gradle-wrapper.jar but no unix gradlew, so the
+        # wrapper's entry point is invoked directly — same Gradle version either way.
+        run: |
+          java -cp gradle/wrapper/gradle-wrapper.jar \
+            org.gradle.wrapper.GradleWrapperMain assembleRelease --no-daemon
+
+      - name: Name the APK after the version
+        id: apk
+        run: |
+          version=$(grep -oP 'versionName "\K[^"]+' android/app/build.gradle)
+          src=android/app/build/outputs/apk/release/app-release.apk
+          [ -f "$src" ] || src=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          out="bestWorshiper-v${version}.apk"
+          cp "$src" "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Report the signing certificate
+        if: steps.keystore.outputs.signed == 'true'
+        # Print the fingerprint so a key swap is visible here rather than as a
+        # failed install on someone's phone.
+        run: |
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs \
+            "${{ steps.apk.outputs.path }}" | grep -i 'SHA-256' || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bestWorshiper-apk
+          path: ${{ steps.apk.outputs.path }}
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.keystore.outputs.signed }}" != "true" ]; then
+            echo "::error::서명 키 없이 릴리즈할 수 없습니다. ANDROID_KEYSTORE_BASE64 시크릿을 설정하세요."
+            exit 1
+          fi
+          gh release create "${{ github.ref_name }}" "${{ steps.apk.outputs.path }}" \
+            --title "bestWorshiper ${{ github.ref_name }}" \
+            --generate-notes

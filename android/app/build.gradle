@@ -14,12 +14,30 @@ android {
         versionName "2.1.0"
     }
 
+    // Release builds are signed with the same key the earlier sideloaded APKs
+    // used, so an update installs over the existing app instead of forcing a
+    // reinstall — which would take the children's data with it. CI supplies the
+    // keystore through these variables; without them the release stays unsigned.
+    signingConfigs {
+        release {
+            if (System.getenv('ANDROID_KEYSTORE_FILE')) {
+                storeFile file(System.getenv('ANDROID_KEYSTORE_FILE'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // Sideloaded build the user installs directly.
         }
         release {
             minifyEnabled false
+            if (System.getenv('ANDROID_KEYSTORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
