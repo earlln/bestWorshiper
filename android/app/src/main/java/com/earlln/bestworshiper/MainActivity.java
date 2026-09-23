@@ -55,6 +55,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS = "bestWorshiper";
     private static final String KEY_DEST = "destTreeUri";
+    // The export file's own document URI, kept so later exports open that very
+    // file instead of looking it up by name — see saveToDestination.
+    private static final String KEY_EXPORT_URI = "exportDocUri";
     private ActivityResultLauncher<Uri> pickFolderLauncher;
 
     @Override
@@ -84,7 +87,9 @@ public class MainActivity extends AppCompatActivity {
                                 Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                     } catch (Exception e) { /* some providers grant only for this session */ }
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                            .putString(KEY_DEST, uri.toString()).apply();
+                            .putString(KEY_DEST, uri.toString())
+                            .remove(KEY_EXPORT_URI)       // a new folder means a new file
+                            .apply();
                     toast("저장 위치를 설정했습니다: " + describeTree(uri));
                     notifyWeb(jsonString(describeTree(uri)));
                 });
@@ -298,7 +303,7 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void clearDestination() {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_DEST).apply();
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_DEST).remove(KEY_EXPORT_URI).apply();
             toast("저장 위치를 해제했습니다.");
         }
 
@@ -324,36 +329,56 @@ public class MainActivity extends AppCompatActivity {
                     dir = next;
                 }
 
-                // Rewrite the existing file in place rather than replacing it.
-                // Deleting and re-creating looked fine on local storage, but
-                // OneDrive's provider sometimes fails to list a file that is
-                // there, so the delete found nothing and the create landed as
-                // "BestWorshiper (1).pptx" — and the service deck's link, which
-                // goes by name, no longer pointed at the new deck.
+                // The service deck's link finds this file by name, so the same
+                // file must be rewritten every week. Looking it up by name is not
+                // enough: OneDrive's provider can return a stale, empty listing
+                // right after the app restarts, and a create then collides on the
+                // server, which quietly stores it as "BestWorshiper 1.pptx" while
+                // the phone still reports the name we asked for. So the file we
+                // made is remembered by its document URI and opened directly;
+                // the name lookup and the create are only for the first time and
+                // for when that file has gone.
                 byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
-                DocumentFile file = dir.findFile(fileName);
+                SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                DocumentFile file = rememberedExport(prefs, fileName);
 
+                if (file == null) file = dir.findFile(fileName);
                 if (file == null || !file.isFile()) {
                     file = dir.createFile(mimeType, fileName);
                     if (file == null) return "create-failed";
-                    // A provider that renamed our new file was hiding the
-                    // original from findFile; drop the copy and use the original.
-                    String made = file.getName();
-                    if (made != null && !made.equals(fileName)) {
-                        file.delete();
-                        file = dir.findFile(fileName);
-                        if (file == null) return "name-taken";
-                    }
                 }
 
                 if (!writeAll(file.getUri(), bytes)) return "stream-failed";
+                prefs.edit().putString(KEY_EXPORT_URI, file.getUri().toString()).apply();
 
+                // If the provider still gave it another name, try to take the
+                // right one back; failing that, say so rather than pretend.
                 String savedAs = file.getName();
-                toast("Saved " + (savedAs == null ? fileName : savedAs));
+                if (savedAs != null && !savedAs.equals(fileName)) {
+                    if (file.renameTo(fileName)) savedAs = file.getName();
+                }
+                if (savedAs != null && !savedAs.equals(fileName)) {
+                    toast("Saved as " + savedAs);
+                    return "renamed:" + savedAs;
+                }
+                toast("Saved " + fileName);
                 return "";
             } catch (Exception e) {
                 return "error:" + e.getMessage();
             }
+        }
+
+        /** The file an earlier export wrote, if it is still there under the right name. */
+        private DocumentFile rememberedExport(SharedPreferences prefs, String fileName) {
+            String saved = prefs.getString(KEY_EXPORT_URI, null);
+            if (saved == null) return null;
+            try {
+                DocumentFile file = DocumentFile.fromSingleUri(this_(), Uri.parse(saved));
+                if (file != null && file.exists() && file.isFile()
+                        && fileName.equals(file.getName()) && file.canWrite()) return file;
+            } catch (Exception ignored) { /* fall back to the lookup below */ }
+            prefs.edit().remove(KEY_EXPORT_URI).apply();
+            return null;
         }
 
         /**

@@ -734,7 +734,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.2.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2778,6 +2778,10 @@ async function exportAwardPptx() {
 
     if (problem === '') {
       showToast(`Saved ${fileName} to the chosen folder.`);
+    } else if (problem.startsWith('renamed:')) {
+      // The folder already held a file the provider would not let us replace.
+      showToast(`Saved as ${problem.slice(8)} — the service deck links to ${fileName}. ` +
+                `Delete the extra copy in the folder and export again.`);
     } else if (problem === 'no-destination') {
       // Nowhere to file it yet — hand it straight to the share sheet.
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
