@@ -2203,13 +2203,13 @@ function pptText({ x, y, w, h, lines, size, color, bold = false, align = 'ctr', 
     `<p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
 }
 
-function pptPicture({ x, y, w, h, rId }) {
+function pptPicture({ x, y, w, h, rId, geom = 'ellipse' }) {
   const id = ++shapeSeq;
   return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="pic${id}"/>` +
     `<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>` +
     `<p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
     `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
-    `<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+    `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
 }
 
 const slideXml = (shapes, timing = '') => XML_HEAD +
@@ -2337,6 +2337,125 @@ function pptAutoplayTiming(spid, durMs) {
     '</p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
 }
 
+// ── Confetti. PowerPoint loops an animated GIF during the show with no timing
+// tree at all, so the reveal and finale slides get one behind the photo and
+// the name. It is drawn into an indexed buffer and LZW-packed here, since the
+// app carries no image files of its own. ──
+const CONFETTI_W = 800, CONFETTI_H = 450;
+const CONFETTI_FRAMES = 36, CONFETTI_DELAY = 6;   // 60ms a frame, a 2.2s seamless loop
+const CONFETTI_PALETTE = ['0D0F14', 'FFD740', '6C63FF', '00C853', 'FF5252', '40C4FF'];
+
+/** Paints a rotated rectangle into an index buffer. */
+function fillRotRect(buf, W, H, cx, cy, w, h, angle, color) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const r = Math.hypot(w, h) / 2;
+  const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r));
+  const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      if (Math.abs(dx * c + dy * s) <= w / 2 && Math.abs(-dx * s + dy * c) <= h / 2) buf[y * W + x] = color;
+    }
+  }
+}
+
+/**
+ * Frames of confetti drifting down. Every motion — fall, sway, spin, flip —
+ * completes a whole number of cycles over the loop, so the last frame runs
+ * straight into the first without a jump.
+ */
+function confettiFrames() {
+  const W = CONFETTI_W, H = CONFETTI_H, F = CONFETTI_FRAMES;
+  let seed = 20260927;   // fixed, so the same week exports the same deck
+  const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+  const pieces = [];
+  for (let i = 0; i < 110; i++) {
+    pieces.push({
+      x: rnd() * W, phase: rnd(), laps: 1 + Math.floor(rnd() * 2),
+      sway: 12 + rnd() * 26, swayN: 1 + Math.floor(rnd() * 2), swayPh: rnd() * Math.PI * 2,
+      spinN: Math.floor(rnd() * 3) - 1, rot0: rnd() * Math.PI,
+      flipN: 1 + Math.floor(rnd() * 3), flipPh: rnd() * Math.PI * 2,
+      w: 7 + rnd() * 6, h: 11 + rnd() * 10, color: 1 + Math.floor(rnd() * 5),
+    });
+  }
+  const frames = [];
+  for (let f = 0; f < F; f++) {
+    const t = f / F;
+    const buf = new Uint8Array(W * H);
+    for (const p of pieces) {
+      const span = H + 40;
+      const y = ((p.phase + t * p.laps) % 1) * span - 20;
+      const x = p.x + p.sway * Math.sin(2 * Math.PI * p.swayN * t + p.swayPh);
+      const flip = Math.abs(Math.cos(2 * Math.PI * p.flipN * t + p.flipPh));
+      fillRotRect(buf, W, H, x, y, Math.max(1.5, p.w * flip), p.h, p.rot0 + 2 * Math.PI * p.spinN * t, p.color);
+    }
+    frames.push(buf);
+  }
+  return frames;
+}
+
+/** GIF89a with a global palette and a looping extension; every frame is a full canvas. */
+function encodeGif(W, H, palette, frames, delay) {
+  const out = [];
+  const u16 = n => out.push(n & 255, (n >> 8) & 255);
+  const str = s => { for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); };
+  const tableBits = 3;   // 8 slots: room for the six colours
+  str('GIF89a'); u16(W); u16(H); out.push(0x80 | (7 << 4) | (tableBits - 1), 0, 0);
+  for (let i = 0; i < (1 << tableBits); i++) {
+    const hex = palette[i] || '000000';
+    out.push(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16));
+  }
+  out.push(0x21, 0xFF, 0x0B); str('NETSCAPE2.0'); out.push(3, 1, 0, 0, 0);   // loop forever
+  for (const frame of frames) {
+    out.push(0x21, 0xF9, 4, 0); u16(delay); out.push(0, 0);
+    out.push(0x2C); u16(0); u16(0); u16(W); u16(H); out.push(0);
+    out.push(tableBits);
+    lzwPack(out, frame, tableBits);
+  }
+  out.push(0x3B);
+  return Uint8Array.from(out);
+}
+
+/** GIF's LZW variant, packed LSB-first into 255-byte sub-blocks. */
+function lzwPack(out, pixels, minCode) {
+  const CLEAR = 1 << minCode, EOI = CLEAR + 1;
+  let codeSize = minCode + 1, next = EOI + 1;
+  let dict = new Map();
+  let acc = 0, bits = 0;
+  const block = [];
+  const flushBlock = () => { if (block.length) { out.push(block.length, ...block); block.length = 0; } };
+  const emit = code => {
+    acc |= code << bits; bits += codeSize;
+    while (bits >= 8) {
+      block.push(acc & 255); acc >>>= 8; bits -= 8;
+      if (block.length === 255) flushBlock();
+    }
+  };
+  emit(CLEAR);
+  let prefix = pixels[0];
+  for (let i = 1; i < pixels.length; i++) {
+    const px = pixels[i];
+    const key = (prefix << 8) | px;
+    const found = dict.get(key);
+    if (found !== undefined) { prefix = found; continue; }
+    emit(prefix);
+    if (next < 4096) {
+      dict.set(key, next++);
+      if (next - 1 === (1 << codeSize) && codeSize < 12) codeSize++;
+    } else {
+      emit(CLEAR); dict = new Map(); codeSize = minCode + 1; next = EOI + 1;
+    }
+    prefix = px;
+  }
+  emit(prefix); emit(EOI);
+  if (bits > 0) { block.push(acc & 255); if (block.length === 255) flushBlock(); }
+  flushBlock();
+  out.push(0);
+}
+
+const confettiGif = () => encodeGif(CONFETTI_W, CONFETTI_H, CONFETTI_PALETTE, confettiFrames(), CONFETTI_DELAY);
+
+
 /**
  * Normalises a kid's photo to a centred square JPEG. Phone photos are large and
  * may be portrait or video; this keeps the deck small and the faces centred.
@@ -2385,7 +2504,7 @@ async function buildAwardPptx() {
   const when = state.currentWeekDate;
 
   const photos = [];   // {name, data}
-  const slides = [];   // {xml, imageRel, audio} — audio names a PPTX_SOUNDS entry
+  const slides = [];   // {xml, imageRel, audio, confetti} — audio names a PPTX_SOUNDS entry
 
   const BG = '0D0F14', GOLD = 'FFD740', ACCENT = '6C63FF', TEXT = 'E8EAF6', DIM = '8A8D9E';
   const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
@@ -2455,7 +2574,7 @@ async function buildAwardPptx() {
     const rw = DECK_W - rx - inEmu(1.2);
     shapes.push(pptText({ x: rx, y: inEmu(3.6), w: rw, h: inEmu(1.2), lines: '🏆  Congratulations!', size: 48, color: GOLD, bold: true, align: 'l' }));
     shapes.push(pptText({ x: rx, y: inEmu(5.0), w: rw, h: inEmu(2.2), lines: kid.name, size: 130, color: TEXT, bold: true, align: 'l' }));
-    slides.push({ xml: shapes, imageRel, audio: 'fanfare' });
+    slides.push({ xml: shapes, imageRel, audio: 'fanfare', confetti: true });
   }
 
   // 4. Finale
@@ -2466,7 +2585,7 @@ async function buildAwardPptx() {
     pptText({ x: 0, y: inEmu(3.0), w: DECK_W, h: inEmu(1.0), lines: "Today's Best Worshipers", size: 40, color: DIM }),
     pptText({ x: inEmu(1), y: inEmu(4.3), w: DECK_W - inEmu(2), h: inEmu(4.0), lines: winners.map(k => k.name), size: nameSize, color: TEXT, bold: true }),
     pptText({ x: 0, y: inEmu(9.4), w: DECK_W, h: inEmu(1.0), lines: 'See you next week 🙌', size: 40, color: ACCENT }),
-  ], audio: 'fanfare' });
+  ], audio: 'fanfare', confetti: true });
 
   return zipStore(pptxParts(slides, photos));
 }
@@ -2486,6 +2605,7 @@ function pptxParts(slides, photos) {
     '<Default Extension="jpeg" ContentType="image/jpeg"/>' +
     '<Default Extension="png" ContentType="image/png"/>' +
     '<Default Extension="wav" ContentType="audio/x-wav"/>' +
+    '<Default Extension="gif" ContentType="image/gif"/>' +
     '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' +
     '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
     '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
@@ -2545,6 +2665,8 @@ function pptxParts(slides, photos) {
       timing = pptAutoplayTiming(id, PPTX_SOUNDS[s.audio].ms);
     }
     const sound = s.audio && PPTX_SOUNDS[s.audio].file;
+    // The confetti goes in right after the background so everything else sits on top.
+    if (s.confetti) s.xml.splice(1, 0, pptPicture({ x: 0, y: 0, w: DECK_W, h: DECK_H, rId: 'rId6', geom: 'rect' }));
     files.push({ name: `ppt/slides/slide${i + 1}.xml`, data: utf8(slideXml(s.xml, timing)) });
     files.push({ name: `ppt/slides/_rels/slide${i + 1}.xml.rels`, data: utf8(XML_HEAD +
       `<Relationships ${RELS}>` +
@@ -2555,6 +2677,7 @@ function pptxParts(slides, photos) {
           rel('rId4', 'audio', `../media/${sound}`) +
           rel('rId5', 'image', '../media/poster.png')
         : '') +
+      (s.confetti ? rel('rId6', 'image', '../media/confetti.gif') : '') +
       '</Relationships>') });
   });
 
@@ -2566,6 +2689,7 @@ function pptxParts(slides, photos) {
     files.push({ name: `ppt/media/${PPTX_SOUNDS[key].file}`, data: PPTX_SOUNDS[key].make() });
   }
   if (sounds.size) files.push({ name: 'ppt/media/poster.png', data: POSTER_PNG });
+  if (slides.some(s => s.confetti)) files.push({ name: 'ppt/media/confetti.gif', data: confettiGif() });
   return files;
 }
 
