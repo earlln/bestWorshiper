@@ -5,6 +5,10 @@
 __*.json
 bestWorshiper_data/
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # OS / editor noise
 Thumbs.db
 Desktop.ini
