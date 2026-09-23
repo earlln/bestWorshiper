@@ -37,8 +37,8 @@ OneDrive 가 설치되어 있지 않아도 상관없습니다 — USB 로 폴더
 
 ## 매주 하는 일
 
-앱에서 **Export PPT** 를 누르면 설정해 둔 폴더에 `BestWorshiper.pptx` 가 그대로
-쓰여집니다 (지난 주 파일을 덮어씀). PC 에서 만들려면:
+앱의 **⚙ 설정 ▸ PPT file** 에서 예배 PPT 옆의 `BestWorshiper.pptx` 를 한 번 골라
+두면, **Export PPT** 가 매주 그 파일을 그대로 덮어씁니다. PC 에서 만들려면:
 
 ```bash
 python tools/make_award_ppt.py --backup 백업.json --out-dir "<예배 PPT 가 있는 폴더>"

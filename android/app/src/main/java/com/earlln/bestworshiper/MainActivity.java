@@ -22,6 +22,7 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -54,11 +55,12 @@ public class MainActivity extends AppCompatActivity {
     private Uri pendingCaptureUri;
 
     private static final String PREFS = "bestWorshiper";
-    private static final String KEY_DEST = "destTreeUri";
-    // The export file's own document URI, kept so later exports open that very
-    // file instead of looking it up by name — see saveToDestination.
-    private static final String KEY_EXPORT_URI = "exportDocUri";
-    private ActivityResultLauncher<Uri> pickFolderLauncher;
+    // The deck file the user picked once; every export rewrites that very file.
+    private static final String KEY_FILE = "exportFileUri";
+    private static final String PPTX_MIME =
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    private ActivityResultLauncher<String[]> pickFileLauncher;
+    private ActivityResultLauncher<String> createFileLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,23 +78,24 @@ public class MainActivity extends AppCompatActivity {
                 new ActivityResultContracts.CaptureVideo(),
                 ok -> deliverToWeb(Boolean.TRUE.equals(ok) ? pendingCaptureUri : null));
 
-        // Remembering the destination folder means later exports file themselves
-        // away without the user steering a share sheet every week.
-        pickFolderLauncher = registerForActivityResult(
-                new ActivityResultContracts.OpenDocumentTree(),
-                uri -> {
-                    if (uri == null) { notifyWeb('"' + "destCancelled" + '"'); return; }
-                    try {
-                        getContentResolver().takePersistableUriPermission(uri,
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                    } catch (Exception e) { /* some providers grant only for this session */ }
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                            .putString(KEY_DEST, uri.toString())
-                            .remove(KEY_EXPORT_URI)       // a new folder means a new file
-                            .apply();
-                    toast("저장 위치를 설정했습니다: " + describeTree(uri));
-                    notifyWeb(jsonString(describeTree(uri)));
-                });
+        // The export target is one file the user picks once, and every week's
+        // deck is written into it. Picking the file rather than a folder keeps
+        // the app out of the provider's name lookup: OneDrive answers that from
+        // a stale listing, and the create that follows lands on the server as
+        // "BestWorshiper 1.pptx" while the phone still reports the name asked for.
+        ActivityResultCallback<Uri> remember = uri -> {
+            if (uri == null) { notifyWeb('"' + "destCancelled" + '"'); return; }
+            try {
+                getContentResolver().takePersistableUriPermission(uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            } catch (Exception e) { /* some providers grant only for this session */ }
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_FILE, uri.toString()).apply();
+            toast("Exports will overwrite " + describeFile(uri));
+            notifyWeb(jsonString(describeFile(uri)));
+        };
+        pickFileLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), remember);
+        createFileLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument(PPTX_MIME), remember);
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -201,10 +204,14 @@ public class MainActivity extends AppCompatActivity {
         return '"' + s.replace("\\", "\\\\").replace("\"", "\\\"") + '"';
     }
 
-    private String describeTree(Uri tree) {
-        DocumentFile dir = DocumentFile.fromTreeUri(this, tree);
-        String name = dir != null ? dir.getName() : null;
-        return name != null ? name : tree.getLastPathSegment();
+    private String describeFile(Uri doc) {
+        try {
+            DocumentFile f = DocumentFile.fromSingleUri(this, doc);
+            String name = f != null ? f.getName() : null;
+            if (name != null) return name;
+        } catch (Exception ignored) { /* fall through to the raw path */ }
+        String last = doc.getLastPathSegment();
+        return last != null ? last : doc.toString();
     }
 
     private void toast(final String msg) {
@@ -281,104 +288,64 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        /** Asks the user which folder exports should land in (e.g. OneDrive/EM). */
+        /** Asks for the existing deck file that every export should overwrite. */
         @JavascriptInterface
         public void pickDestination() {
             runOnUiThread(() -> {
                 try {
-                    pickFolderLauncher.launch(null);
+                    pickFileLauncher.launch(new String[]{"*/*"});
                 } catch (Exception e) {
-                    toast("폴더 선택을 열 수 없습니다: " + e.getMessage());
+                    toast("Could not open the file picker: " + e.getMessage());
                 }
             });
         }
 
-        /** The chosen folder's display name, or "" when none is set yet. */
+        /** Creates the deck file where the user chooses, and remembers it. */
+        @JavascriptInterface
+        public void createDestination(String suggestedName) {
+            runOnUiThread(() -> {
+                try {
+                    createFileLauncher.launch(suggestedName);
+                } catch (Exception e) {
+                    toast("Could not open the file picker: " + e.getMessage());
+                }
+            });
+        }
+
+        /** The chosen file's display name, or "" when none is set yet. */
         @JavascriptInterface
         public String destinationName() {
-            String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
+            String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_FILE, null);
             if (saved == null) return "";
-            try { return describeTree(Uri.parse(saved)); } catch (Exception e) { return ""; }
+            try { return describeFile(Uri.parse(saved)); } catch (Exception e) { return ""; }
         }
 
         @JavascriptInterface
         public void clearDestination() {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_DEST).remove(KEY_EXPORT_URI).apply();
-            toast("저장 위치를 해제했습니다.");
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_FILE).apply();
+            toast("Export file cleared.");
         }
 
         /**
-         * Writes into the chosen folder, creating subPath ("2026/20260920") along
-         * the way. Returns "" on success or a reason, so the page can fall back to
-         * sharing rather than leaving the user with nothing.
+         * Rewrites the chosen file in place. Returns "" on success or a reason, so
+         * the page can fall back to sharing rather than leave the user with
+         * nothing. fileName and subPath stay in the signature for the page's sake;
+         * the target is the file the user picked.
          */
         @JavascriptInterface
         public String saveToDestination(String fileName, String base64Data,
                                         String mimeType, String subPath) {
-            String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
+            String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_FILE, null);
             if (saved == null) return "no-destination";
             try {
-                DocumentFile dir = DocumentFile.fromTreeUri(this_(), Uri.parse(saved));
-                if (dir == null || !dir.canWrite()) return "not-writable";
-
-                for (String part : subPath.split("/")) {
-                    if (part.isEmpty()) continue;
-                    DocumentFile next = dir.findFile(part);
-                    if (next == null || !next.isDirectory()) next = dir.createDirectory(part);
-                    if (next == null) return "mkdir-failed:" + part;
-                    dir = next;
-                }
-
-                // The service deck's link finds this file by name, so the same
-                // file must be rewritten every week. Looking it up by name is not
-                // enough: OneDrive's provider can return a stale, empty listing
-                // right after the app restarts, and a create then collides on the
-                // server, which quietly stores it as "BestWorshiper 1.pptx" while
-                // the phone still reports the name we asked for. So the file we
-                // made is remembered by its document URI and opened directly;
-                // the name lookup and the create are only for the first time and
-                // for when that file has gone.
+                Uri uri = Uri.parse(saved);
                 byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
-                SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-                DocumentFile file = rememberedExport(prefs, fileName);
-
-                if (file == null) file = dir.findFile(fileName);
-                if (file == null || !file.isFile()) {
-                    file = dir.createFile(mimeType, fileName);
-                    if (file == null) return "create-failed";
-                }
-
-                if (!writeAll(file.getUri(), bytes)) return "stream-failed";
-                prefs.edit().putString(KEY_EXPORT_URI, file.getUri().toString()).apply();
-
-                // If the provider still gave it another name, try to take the
-                // right one back; failing that, say so rather than pretend.
-                String savedAs = file.getName();
-                if (savedAs != null && !savedAs.equals(fileName)) {
-                    if (file.renameTo(fileName)) savedAs = file.getName();
-                }
-                if (savedAs != null && !savedAs.equals(fileName)) {
-                    toast("Saved as " + savedAs);
-                    return "renamed:" + savedAs;
-                }
-                toast("Saved " + fileName);
+                if (!writeAll(uri, bytes)) return "stream-failed";
+                toast("Saved " + describeFile(uri));
                 return "";
             } catch (Exception e) {
                 return "error:" + e.getMessage();
             }
-        }
-
-        /** The file an earlier export wrote, if it is still there under the right name. */
-        private DocumentFile rememberedExport(SharedPreferences prefs, String fileName) {
-            String saved = prefs.getString(KEY_EXPORT_URI, null);
-            if (saved == null) return null;
-            try {
-                DocumentFile file = DocumentFile.fromSingleUri(this_(), Uri.parse(saved));
-                if (file != null && file.exists() && file.isFile()
-                        && fileName.equals(file.getName()) && file.canWrite()) return file;
-            } catch (Exception ignored) { /* fall back to the lookup below */ }
-            prefs.edit().remove(KEY_EXPORT_URI).apply();
-            return null;
         }
 
         /**

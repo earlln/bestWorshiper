@@ -673,20 +673,21 @@ select:focus { outline: none; border-color: var(--accent); }
         <p class="hint" style="margin-top:4px"><b>Android</b>: open in Chrome → menu (⋮) → "Add to Home screen" / "Install app"</p>
       </div>
       <div class="card hidden" id="destination-card">
-        <h3>📁 PPT destination</h3>
-        <p class="hint">Set once, and every export writes <code>BestWorshiper.pptx</code> straight
-        into that folder, replacing last week's.<br>
-        Keep the service deck in the same folder and its link finds the new deck on its own —
-        which is why the name never changes.</p>
+        <h3>📁 PPT file</h3>
+        <p class="hint">Pick the deck file once — <code>BestWorshiper.pptx</code> next to the service deck —
+        and every export rewrites that same file, so the service deck's link keeps finding the
+        new week.<br>
+        No file there yet? <b>Create new file</b> makes it in the folder you choose.</p>
         <div class="setting-row">
-          <div class="setting-key">Current folder</div>
+          <div class="setting-key">Current file</div>
           <div><b id="destination-name">Not set</b></div>
         </div>
         <div class="row-actions">
-          <button id="destination-pick-btn" class="btn accent">Choose folder</button>
+          <button id="destination-pick-btn" class="btn accent">Choose existing file</button>
+          <button id="destination-create-btn" class="btn">Create new file</button>
           <button id="destination-clear-btn" class="btn">Clear</button>
         </div>
-        <p class="hint" style="margin-top:8px">With no folder set, exporting opens the share sheet instead. Install the OneDrive app and it appears in the folder picker.</p>
+        <p class="hint" style="margin-top:8px">With no file set, exporting opens the share sheet instead. Install the OneDrive app and it appears in the picker.</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -734,7 +735,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.2.1';
+const APP_VERSION = '2.3.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1889,6 +1890,7 @@ function renderDestination() {
     return;
   }
   card.classList.remove('hidden');
+  document.getElementById('destination-create-btn').hidden = !window.AndroidBridge.createDestination;
   let name = '';
   try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
   document.getElementById('destination-name').textContent = name || 'Not set (export will share)';
@@ -2777,16 +2779,15 @@ async function exportAwardPptx() {
       : 'no-destination';
 
     if (problem === '') {
-      showToast(`Saved ${fileName} to the chosen folder.`);
-    } else if (problem.startsWith('renamed:')) {
-      // The folder already held a file the provider would not let us replace.
-      showToast(`Saved as ${problem.slice(8)} — the service deck links to ${fileName}. ` +
-                `Delete the extra copy in the folder and export again.`);
+      let name = fileName;
+      try { name = window.AndroidBridge.destinationName() || fileName; } catch (e) {}
+      showToast(`Saved ${name}.`);
     } else if (problem === 'no-destination') {
-      // Nowhere to file it yet — hand it straight to the share sheet.
+      // No file chosen yet — hand it straight to the share sheet.
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
     } else {
-      showToast('Could not save to the folder (' + problem + ') — sharing instead.');
+      // Most likely the grant on the chosen file lapsed; picking it again fixes that.
+      showToast('Could not write the chosen file (' + problem + ') — choose it again in Settings. Sharing instead.');
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
     }
   } catch (e) {
@@ -3123,6 +3124,9 @@ document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
 document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
 document.getElementById('destination-pick-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.pickDestination) window.AndroidBridge.pickDestination();
+});
+document.getElementById('destination-create-btn').addEventListener('click', () => {
+  if (IS_ANDROID_APP && window.AndroidBridge.createDestination) window.AndroidBridge.createDestination(AWARD_PPTX_NAME);
 });
 document.getElementById('destination-clear-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.clearDestination) {
