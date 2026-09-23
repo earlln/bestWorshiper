@@ -87,15 +87,18 @@ base64 만들기 — PowerShell 에서 실행하면 클립보드에 복사됩니
 
    확인: `./tools/check_version.sh`
 
-2. main 에 커밋하고 태그를 밉니다.
+2. main 에 커밋하고 릴리즈를 시작합니다. 두 방법 중 하나입니다.
 
    ```bash
    git tag v2.1.0
    git push origin v2.1.0
    ```
 
+   또는 Actions 탭 ▸ **Android** ▸ *Run workflow* 에서 **릴리즈할 태그** 칸에
+   `v2.1.0` 을 적고 실행합니다. 태그는 워크플로가 만들어 줍니다.
+
 3. Actions 탭에서 빌드를 지켜봅니다. 끝나면 릴리즈에 `bestWorshiper-v2.1.0.apk`
-   가 붙어 있습니다.
+   가 붙어 있습니다. 같은 태그로 다시 돌리면 APK 만 교체됩니다.
 
 ## 확인할 것
 
@@ -103,7 +106,8 @@ base64 만들기 — PowerShell 에서 실행하면 클립보드에 복사됩니
 이전 릴리즈와 같은 값인지 한 번 보고 배포하세요. 다르면 사용자가 덮어설치를
 하지 못합니다.
 
-## 태그 없이 빌드만
+## 빌드만 하고 릴리즈는 안 하기
 
-Actions 탭 ▸ **Android** ▸ *Run workflow*. 릴리즈는 만들지 않고 APK 를
-아티팩트로만 올립니다. main 으로의 푸시와 PR 도 같은 빌드를 돌립니다.
+Actions 탭 ▸ **Android** ▸ *Run workflow* 에서 태그 칸을 **비워두고** 실행하면
+릴리즈 없이 APK 를 아티팩트로만 올립니다. main 으로의 푸시와 PR 도 같은 빌드를
+돌립니다.
