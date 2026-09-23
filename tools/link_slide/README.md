@@ -44,7 +44,11 @@ OneDrive 가 설치되어 있지 않아도 상관없습니다 — USB 로 폴더
 python tools/make_award_ppt.py --backup 백업.json --out-dir "<예배 PPT 가 있는 폴더>"
 ```
 
-어느 쪽이든 `BestWorshiper.pptx` 가 예배 PPT 옆에 놓이면 됩니다. **파일명이 고정이라 링크를 다시
+어느 쪽이든 `BestWorshiper.pptx` 가 예배 PPT 옆에 놓이면 됩니다.
+
+앱이 내보낸 덱에는 **북소리와 팡파레가 들어 있어** 슬라이드가 뜨면 자동으로
+납니다 (후보 명단·드럼롤 장은 북소리, 공개·마무리 장은 팡파레). PC 스크립트로
+만든 덱은 아직 무음입니다. **파일명이 고정이라 링크를 다시
 손볼 필요가 없습니다.** 지난 주 파일을 남겨두려면 하위 폴더로 옮기거나
 `--out-name "BestWorshiper_{date}.pptx"` 로 따로 한 부 더 뽑아두세요.
 
