@@ -227,6 +227,10 @@ def main():
     ap.add_argument('--nominees', help='후보 이름을 쉼표로 구분')
     ap.add_argument('--date', help='제목/파일명에 쓸 날짜 (기본: 오늘)')
     ap.add_argument('--out-dir', default='.', help='저장 폴더')
+    ap.add_argument('--out-name', default='BestWorshiper.pptx',
+                    help='저장 파일명. 기본값은 날짜 없는 고정 이름이라 예배 PPT의 '
+                         '링크 슬라이드가 매주 그대로 가리킨다. 날짜를 붙이려면 '
+                         '--out-name "BestWorshiper_{date}.pptx"')
     args = ap.parse_args()
 
     nominees = []
@@ -244,7 +248,8 @@ def main():
         raise SystemExit('선정된 아이가 없습니다.')
 
     stamp = (args.date or when or date.today().isoformat()).replace('-', '')
-    out = Path(args.out_dir) / f'BestWorshiper_{stamp}.pptx'
+    # 파일명이 매주 바뀌면 예배 PPT의 링크가 깨지므로 기본값은 고정 이름이다.
+    out = Path(args.out_dir) / args.out_name.format(date=stamp)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     build(out, when, winners, nominees)
