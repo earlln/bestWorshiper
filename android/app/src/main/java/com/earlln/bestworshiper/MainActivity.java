@@ -341,8 +341,23 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = Uri.parse(saved);
                 byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
                 if (!writeAll(uri, bytes)) return "stream-failed";
-                toast("Saved " + describeFile(uri));
-                return "";
+
+                // When the file was created next to one of the same name, the
+                // provider filed it as "BestWorshiper 1.pptx"; the deck's link
+                // goes by name, so take the intended name back once the other
+                // file is out of the way. Until then, say which name it has.
+                String name = describeFile(uri);
+                if (!fileName.equals(name)) {
+                    DocumentFile f = DocumentFile.fromSingleUri(this_(), uri);
+                    if (f != null && f.renameTo(fileName)) {
+                        uri = f.getUri();
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                .putString(KEY_FILE, uri.toString()).apply();
+                        name = describeFile(uri);
+                    }
+                }
+                toast("Saved " + name);
+                return fileName.equals(name) ? "" : "renamed:" + name;
             } catch (Exception e) {
                 return "error:" + e.getMessage();
             }

@@ -735,7 +735,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2782,6 +2782,10 @@ async function exportAwardPptx() {
       let name = fileName;
       try { name = window.AndroidBridge.destinationName() || fileName; } catch (e) {}
       showToast(`Saved ${name}.`);
+    } else if (problem.startsWith('renamed:')) {
+      // Written, but under the name the provider gave it; the deck links by name.
+      showToast(`Saved as ${problem.slice(8)}, but the service deck links to ${fileName}. ` +
+                `Delete the other ${fileName} in OneDrive and export again — this file will take the name.`);
     } else if (problem === 'no-destination') {
       // No file chosen yet — hand it straight to the share sheet.
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
