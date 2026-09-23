@@ -16,7 +16,7 @@ RELS  = "ppt/slides/_rels/slide1.xml.rels"
 NOTES = "ppt/notesSlides/notesSlide1.xml"
 HYPERLINK_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
 ACTION = "ppaction://hlinkpres?slideindex=1&amp;slidetitle="
-BUTTON_SHAPES = ("BtnAward", "BtnAwardLabel", "BtnAwardFull")
+BUTTON_SHAPES = ("BtnAwardFull",)
 
 
 def strip_hlink(cnvpr: str) -> str:
