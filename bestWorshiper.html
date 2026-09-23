@@ -674,8 +674,10 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
       <div class="card hidden" id="destination-card">
         <h3>📁 PPT destination</h3>
-        <p class="hint">Set once, and every export files itself under <b>chosen folder / year / date</b>.<br>
-        e.g. pick <b>EM</b> on OneDrive → <code>EM/2026/20260920/BestWorshiper_20260920.pptx</code></p>
+        <p class="hint">Set once, and every export writes <code>BestWorshiper.pptx</code> straight
+        into that folder, replacing last week's.<br>
+        Keep the service deck in the same folder and its link finds the new deck on its own —
+        which is why the name never changes.</p>
         <div class="setting-row">
           <div class="setting-key">Current folder</div>
           <div><b id="destination-name">Not set</b></div>
@@ -732,7 +734,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2479,11 +2481,8 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-/** Year folder then dated folder, e.g. "2026/20260920". */
-function destinationSubPath(dateStr) {
-  const [y, m, d] = dateStr.split('-');
-  return `${y}/${y}${m}${d}`;
-}
+/** Kept in step with the link in tools/link_slide — see that folder's README. */
+const AWARD_PPTX_NAME = 'BestWorshiper.pptx';
 
 async function exportAwardPptx() {
   const saved = savedWeek();
@@ -2496,8 +2495,10 @@ async function exportAwardPptx() {
   btn.textContent = 'Building...';
   try {
     const bytes = await buildAwardPptx();
-    const stamp = state.currentWeekDate.replace(/-/g, '');
-    const fileName = `BestWorshiper_${stamp}.pptx`;
+    // A fixed name, written straight into the chosen folder. The service deck
+    // links to this file by name alone, so a dated name — or a dated subfolder —
+    // would break that link every week.
+    const fileName = AWARD_PPTX_NAME;
 
     if (!IS_ANDROID_APP) {
       saveBinaryToDevice(fileName, bytes, PPTX_MIME);
@@ -2505,13 +2506,12 @@ async function exportAwardPptx() {
     }
 
     const b64 = base64FromBytes(bytes);
-    const sub = destinationSubPath(state.currentWeekDate);
     const problem = window.AndroidBridge.saveToDestination
-      ? window.AndroidBridge.saveToDestination(fileName, b64, PPTX_MIME, sub)
+      ? window.AndroidBridge.saveToDestination(fileName, b64, PPTX_MIME, '')
       : 'no-destination';
 
     if (problem === '') {
-      showToast(`Saved to ${sub}.`);
+      showToast(`Saved ${fileName} to the chosen folder.`);
     } else if (problem === 'no-destination') {
       // Nowhere to file it yet — hand it straight to the share sheet.
       window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
@@ -2533,14 +2533,31 @@ async function exportAwardPptx() {
 // ═══════════════════════════════════════════════════════════
 const ceremony = {
   winners: [],   // kid records, in reveal order
-  step: 0,       // 0 = intro, then suspense/reveal pairs, last = finale
+  nominees: [],  // names, shown once before the reveals begin
+  plan: [],      // one entry per screen, built when the ceremony opens
+  step: 0,       // index into plan
   sound: true,
   audio: null,
   drumStop: null,
 };
 
-/** Steps run: intro, then two per winner, then the finale. */
-function ceremonySteps() { return 2 + ceremony.winners.length * 2; }
+/**
+ * The running order: intro, the nominees, a drumroll and a reveal per winner,
+ * then the finale. Spelling the screens out beats recomputing them from the
+ * step number every time the nominees screen shifts everything along by one.
+ */
+function buildCeremonyPlan() {
+  const plan = [{ kind: 'intro' }];
+  if (ceremony.nominees.length) plan.push({ kind: 'nominees' });
+  ceremony.winners.forEach((_, i) => {
+    plan.push({ kind: 'suspense', index: i });
+    plan.push({ kind: 'reveal', index: i });
+  });
+  plan.push({ kind: 'finale' });
+  return plan;
+}
+
+function ceremonyStep() { return ceremony.plan[ceremony.step] || { kind: 'intro' }; }
 
 function openCeremony() {
   const saved = savedWeek();
@@ -2549,6 +2566,9 @@ function openCeremony() {
     return;
   }
   ceremony.winners = saved.winnerIds.map(id => kidById(id));
+  ceremony.nominees = (saved.candidateIds || [])
+    .map(id => kidById(id)).filter(Boolean).map(k => k.name);
+  ceremony.plan = buildCeremonyPlan();
   ceremony.step = 0;
   document.getElementById('ceremony').classList.remove('hidden');
   renderCeremony();
@@ -2561,7 +2581,7 @@ function closeCeremony() {
 }
 
 function advanceCeremony() {
-  if (ceremony.step >= ceremonySteps() - 1) { closeCeremony(); return; }
+  if (ceremony.step >= ceremony.plan.length - 1) { closeCeremony(); return; }
   ceremony.step++;
   renderCeremony();
 }
@@ -2570,18 +2590,26 @@ function renderCeremony() {
   const stage = document.getElementById('ceremony-stage');
   const hint = document.getElementById('ceremony-hint');
   const total = ceremony.winners.length;
-  const step = ceremony.step;
+  const s = ceremonyStep();
   stopDrum();
   document.getElementById('ceremony-confetti').innerHTML = '';
 
-  if (step === 0) {
+  if (s.kind === 'intro') {
     stage.innerHTML = `
       <div class="cm-emoji">🏆</div>
       <div class="cm-big">Best Worshiper</div>
       <div class="cm-sub">${state.currentWeekDate}</div>
       <div class="cm-sub">${meetTodayLine(total)}</div>`;
     hint.textContent = 'Tap to begin';
-  } else if (step === ceremonySteps() - 1) {
+  } else if (s.kind === 'nominees') {
+    stage.innerHTML = `
+      <div class="cm-kicker">TODAY'S NOMINEES &middot; ${ceremony.nominees.length}</div>
+      <div class="cm-emoji cm-shake">🥁</div>
+      <div class="cm-list">${ceremony.nominees.map(n => `<span>${escapeHtml(n)}</span>`).join('')}</div>
+      <div class="cm-dim">Who will it be?</div>`;
+    hint.textContent = 'Tap to start the reveals';
+    startDrum();
+  } else if (s.kind === 'finale') {
     stage.innerHTML = `
       <div class="cm-kicker">TODAY'S BEST WORSHIPERS</div>
       <div class="cm-big">Congratulations!</div>
@@ -2591,13 +2619,10 @@ function renderCeremony() {
     burstConfetti(70);
     playFanfare();
   } else {
-    const index = Math.floor((step - 1) / 2);
-    const isReveal = (step - 1) % 2 === 1;
-    const kid = ceremony.winners[index];
-
-    if (!isReveal) {
+    const kid = ceremony.winners[s.index];
+    if (s.kind === 'suspense') {
       stage.innerHTML = `
-        <div class="cm-kicker">BEST WORSHIPER ${index + 1} / ${total}</div>
+        <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
         <div class="cm-emoji cm-shake">🥁</div>
         <div class="cm-big">Drumroll, please...</div>
         <div class="cm-dim">Who could it be?</div>`;
@@ -2605,10 +2630,10 @@ function renderCeremony() {
       startDrum();
     } else {
       stage.innerHTML = `
-        <div class="cm-kicker">BEST WORSHIPER ${index + 1} / ${total}</div>
+        <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
         <div class="cm-photo">${ceremonyPhotoHTML(kid)}</div>
         <div class="cm-name">${escapeHtml(kid.name)}</div>`;
-      hint.textContent = index + 1 < total ? 'Tap for the next one' : 'Tap to finish';
+      hint.textContent = s.index + 1 < total ? 'Tap for the next one' : 'Tap to finish';
       burstConfetti(45);
       playFanfare();
     }
@@ -2625,9 +2650,9 @@ function ceremonyPhotoHTML(kid) {
 }
 
 function renderCeremonyDots() {
-  const total = ceremony.winners.length;
-  const current = ceremony.step === 0 ? -1 : Math.floor((ceremony.step - 1) / 2);
-  const done = ceremony.step >= ceremonySteps() - 1;
+  const s = ceremonyStep();
+  const current = typeof s.index === 'number' ? s.index : -1;
+  const done = s.kind === 'finale';
   document.getElementById('ceremony-dots').innerHTML = ceremony.winners
     .map((_, i) => `<i class="${done || i < current ? 'done' : (i === current ? 'now' : '')}"></i>`)
     .join('');
@@ -2654,37 +2679,72 @@ function audioCtx() {
     if (!Ctx) return null;
     ceremony.audio = new Ctx();
   }
-  if (ceremony.audio.state === 'suspended') ceremony.audio.resume();
   return ceremony.audio;
+}
+
+/**
+ * resume() is asynchronous, so anything scheduled straight after it can be
+ * dropped while the context is still suspended — which is how the drumroll
+ * ended up silent. Wait for it, then play.
+ */
+function withAudio(fn) {
+  const ctx = audioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().then(() => fn(ctx), () => {});
+  else fn(ctx);
+}
+
+/**
+ * One snare hit on the audio clock. The band is kept above 260Hz because a
+ * laptop speaker cannot move enough air below that, and the old 900Hz lowpass
+ * left nothing but the part it could not play.
+ */
+function scheduleDrumHit(ctx, at, accent) {
+  const dur = 0.08;
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.8);
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 260;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 6500;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(accent ? 0.5 : 0.3, at);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  src.connect(hp).connect(lp).connect(gain).connect(ctx.destination);
+  src.start(at);
+  src.stop(at + dur);
 }
 
 function startDrum() {
   if (!ceremony.sound) return;
-  const ctx = audioCtx();
-  if (!ctx) return;
   let stopped = false;
-  ceremony.drumStop = () => { stopped = true; };
+  let timer = null;
+  ceremony.drumStop = () => { stopped = true; if (timer) clearTimeout(timer); };
 
-  const hit = () => {
+  withAudio(ctx => {
     if (stopped) return;
-    const dur = 0.06;
-    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const gain = ctx.createGain();
-    gain.gain.value = 0.22;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 900;
-    src.connect(filter).connect(gain).connect(ctx.destination);
-    src.start();
-    setTimeout(hit, 55 + Math.random() * 25);
-  };
-  hit();
+    let next = ctx.currentTime + 0.06;
+    let beat = 0;
+    // Queue a little ahead of the clock: a throttled setTimeout then stutters
+    // the timer, not the roll itself.
+    const pump = () => {
+      if (stopped) return;
+      while (next < ctx.currentTime + 0.3) {
+        scheduleDrumHit(ctx, next, beat % 4 === 0);
+        next += 0.055 + Math.random() * 0.02;
+        beat++;
+      }
+      timer = setTimeout(pump, 120);
+    };
+    pump();
+  });
 }
 
 function stopDrum() {
@@ -2693,29 +2753,28 @@ function stopDrum() {
 
 function playFanfare() {
   if (!ceremony.sound) return;
-  const ctx = audioCtx();
-  if (!ctx) return;
-  // A simple major triad walk-up — celebratory without needing a sample.
-  [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-    const at = ctx.currentTime + i * 0.11;
-    gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(0.18, at + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.001, at + 0.65);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(at);
-    osc.stop(at + 0.7);
+  withAudio(ctx => {
+    // A simple major triad walk-up — celebratory without needing a sample.
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const at = ctx.currentTime + i * 0.11;
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(0.22, at + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.65);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.7);
+    });
   });
 }
 
-/** True while a drumroll step is on screen. */
+/** True while a screen that carries the drumroll is showing. */
 function ceremonyIsSuspense() {
-  const step = ceremony.step;
-  if (step <= 0 || step >= ceremonySteps() - 1) return false;
-  return (step - 1) % 2 === 0;
+  const kind = ceremonyStep().kind;
+  return kind === 'suspense' || kind === 'nominees';
 }
 
 function toggleCeremonySound() {

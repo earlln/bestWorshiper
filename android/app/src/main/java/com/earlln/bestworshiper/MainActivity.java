@@ -334,7 +334,7 @@ public class MainActivity extends AppCompatActivity {
                     if (out == null) return "stream-failed";
                     out.write(bytes);
                 }
-                toast(subPath + " 에 저장했습니다: " + fileName);
+                toast("Saved " + fileName);
                 return "";
             } catch (Exception e) {
                 return "error:" + e.getMessage();
