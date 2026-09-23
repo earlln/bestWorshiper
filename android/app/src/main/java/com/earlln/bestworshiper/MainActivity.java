@@ -324,20 +324,56 @@ public class MainActivity extends AppCompatActivity {
                     dir = next;
                 }
 
-                DocumentFile existing = dir.findFile(fileName);
-                if (existing != null) existing.delete();   // overwrite this week's file
-                DocumentFile file = dir.createFile(mimeType, fileName);
-                if (file == null) return "create-failed";
-
+                // Rewrite the existing file in place rather than replacing it.
+                // Deleting and re-creating looked fine on local storage, but
+                // OneDrive's provider sometimes fails to list a file that is
+                // there, so the delete found nothing and the create landed as
+                // "BestWorshiper (1).pptx" — and the service deck's link, which
+                // goes by name, no longer pointed at the new deck.
                 byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
-                try (OutputStream out = getContentResolver().openOutputStream(file.getUri())) {
-                    if (out == null) return "stream-failed";
-                    out.write(bytes);
+                DocumentFile file = dir.findFile(fileName);
+
+                if (file == null || !file.isFile()) {
+                    file = dir.createFile(mimeType, fileName);
+                    if (file == null) return "create-failed";
+                    // A provider that renamed our new file was hiding the
+                    // original from findFile; drop the copy and use the original.
+                    String made = file.getName();
+                    if (made != null && !made.equals(fileName)) {
+                        file.delete();
+                        file = dir.findFile(fileName);
+                        if (file == null) return "name-taken";
+                    }
                 }
-                toast("Saved " + fileName);
+
+                if (!writeAll(file.getUri(), bytes)) return "stream-failed";
+
+                String savedAs = file.getName();
+                toast("Saved " + (savedAs == null ? fileName : savedAs));
                 return "";
             } catch (Exception e) {
                 return "error:" + e.getMessage();
+            }
+        }
+
+        /**
+         * Truncates the target and writes the whole file. "wt" is what makes an
+         * existing file shorter than the old one come out right; providers that
+         * reject the mode fall back to a plain write.
+         */
+        private boolean writeAll(Uri uri, byte[] bytes) {
+            try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+                if (out == null) return false;
+                out.write(bytes);
+                return true;
+            } catch (Exception truncateUnsupported) {
+                try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                    if (out == null) return false;
+                    out.write(bytes);
+                    return true;
+                } catch (Exception e) {
+                    return false;
+                }
             }
         }
 
