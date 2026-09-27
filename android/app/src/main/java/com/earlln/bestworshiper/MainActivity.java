@@ -9,6 +9,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -64,6 +66,15 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<String[]> pickFileLauncher;
     private ActivityResultLauncher<Uri> pickFolderLauncher;
 
+    // A USB drive plugged into the phone is reached through the document
+    // picker like any other volume, but the picker can be opened straight at
+    // that volume, so the user only has to confirm. The grant is kept so the
+    // same drive is written without asking again.
+    private static final String KEY_USB = "usbTreeUri";
+    private static final String PHONE_DIR = "bestWorshiper";   // under Download/
+    private ActivityResultLauncher<Intent> usbTreeLauncher;
+    private byte[] pendingBytes; private String pendingName, pendingMime;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -103,6 +114,23 @@ public class MainActivity extends AppCompatActivity {
                     .putString(KEY_DEST, uri.toString()).remove(KEY_FILE).apply();   // a new folder means a new file
             toast("Exports will go to " + describeTree(uri));
             notifyWeb(jsonString(describeTree(uri)));
+        });
+
+        usbTreeLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), result -> {
+            Uri tree = result.getData() != null ? result.getData().getData() : null;
+            byte[] bytes = pendingBytes; String name = pendingName, mime = pendingMime;
+            pendingBytes = null; pendingName = null; pendingMime = null;
+            if (tree == null || bytes == null) { notifyExport(jsonString("cancelled")); return; }
+            persist(tree);
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_USB, tree.toString()).apply();
+            try {
+                String saved = writeIntoTree(tree, name, mime, bytes);
+                toast("Saved to USB: " + saved);
+                notifyExport(jsonString("saved:" + saved));
+            } catch (Exception e) {
+                notifyExport(jsonString("error:" + e.getMessage()));
+            }
         });
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
@@ -206,6 +234,36 @@ public class MainActivity extends AppCompatActivity {
     private void notifyWeb(String jsonArg) {
         runOnUiThread(() -> webView.evaluateJavascript(
                 "window.onDestinationPicked && window.onDestinationPicked(" + jsonArg + ")", null));
+    }
+
+    private void notifyExport(String jsonArg) {
+        runOnUiThread(() -> webView.evaluateJavascript(
+                "window.onExportResult && window.onExportResult(" + jsonArg + ")", null));
+    }
+
+    /** Rewrites fileName inside a folder we hold a grant on, creating it the first time. */
+    private String writeIntoTree(Uri tree, String fileName, String mime, byte[] bytes) throws Exception {
+        DocumentFile dir = DocumentFile.fromTreeUri(this, tree);
+        if (dir == null || !dir.canWrite()) throw new IllegalStateException("folder not writable");
+        DocumentFile file = dir.findFile(fileName);
+        if (file == null || !file.isFile()) file = dir.createFile(mime, fileName);
+        if (file == null) throw new IllegalStateException("could not create file");
+        try (OutputStream out = getContentResolver().openOutputStream(file.getUri(), "wt")) {
+            if (out == null) throw new IllegalStateException("stream failed");
+            out.write(bytes);
+        }
+        String name = file.getName();
+        return name != null ? name : fileName;
+    }
+
+    /** The mounted, removable volume — the USB drive — or null. */
+    private StorageVolume usbVolume() {
+        StorageManager sm = (StorageManager) getSystemService(Context.STORAGE_SERVICE);
+        if (sm == null) return null;
+        for (StorageVolume v : sm.getStorageVolumes()) {
+            if (v.isRemovable() && !v.isPrimary() && Environment.MEDIA_MOUNTED.equals(v.getState())) return v;
+        }
+        return null;
     }
 
     private static String jsonString(String s) {
@@ -428,6 +486,98 @@ public class MainActivity extends AppCompatActivity {
                     return false;
                 }
             }
+        }
+
+        /**
+         * Writes the deck to the phone itself, under Download/bestWorshiper,
+         * replacing the previous week's. Returns "" or a reason.
+         */
+        @JavascriptInterface
+        public String saveToPhone(String fileName, String base64Data, String mimeType) {
+            try {
+                byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
+                String where = "Download/" + PHONE_DIR + "/";
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    Uri collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+                    // Our earlier copy can be deleted; one left by a previous install
+                    // cannot, and then the new one gets a "(1)" — reported below.
+                    try {
+                        getContentResolver().delete(collection,
+                                MediaStore.MediaColumns.RELATIVE_PATH + "=? AND " + MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                                new String[]{where, fileName});
+                    } catch (Exception ignored) { /* not ours to delete */ }
+
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+                    values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+                    values.put(MediaStore.MediaColumns.RELATIVE_PATH, where);
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                    Uri item = getContentResolver().insert(collection, values);
+                    if (item == null) return "insert-failed";
+                    try (OutputStream out = getContentResolver().openOutputStream(item)) {
+                        if (out == null) return "stream-failed";
+                        out.write(bytes);
+                    }
+                    values.clear();
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                    getContentResolver().update(item, values, null, null);
+
+                    String name = fileName;
+                    try (android.database.Cursor c = getContentResolver().query(item,
+                            new String[]{MediaStore.MediaColumns.DISPLAY_NAME}, null, null, null)) {
+                        if (c != null && c.moveToFirst()) name = c.getString(0);
+                    }
+                    toast("Saved to " + where + name);
+                    return fileName.equals(name) ? "" : "renamed:" + name;
+                } else {
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(
+                            Environment.DIRECTORY_DOWNLOADS), PHONE_DIR);
+                    if (!dir.exists() && !dir.mkdirs()) return "mkdir-failed";
+                    try (OutputStream out = new FileOutputStream(new File(dir, fileName))) {
+                        out.write(bytes);
+                    }
+                    toast("Saved to " + where + fileName);
+                    return "";
+                }
+            } catch (Exception e) {
+                return "error:" + e.getMessage();
+            }
+        }
+
+        /**
+         * Writes the deck to the USB drive. With a grant on that drive already
+         * held this finishes here and returns "saved:<name>"; otherwise it opens
+         * the picker at the drive and returns "picking", and the result arrives
+         * through window.onExportResult. "no-usb" when nothing is plugged in.
+         */
+        @JavascriptInterface
+        public String exportToUsb(String fileName, String base64Data, String mimeType) {
+            StorageVolume usb = usbVolume();
+            if (usb == null) return "no-usb";
+            byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
+
+            String held = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_USB, null);
+            if (held != null) {
+                try {
+                    String saved = writeIntoTree(Uri.parse(held), fileName, mimeType, bytes);
+                    toast("Saved to USB: " + saved);
+                    return "saved:" + saved;
+                } catch (Exception e) { /* a different drive, or the grant lapsed — ask again */ }
+            }
+
+            pendingBytes = bytes; pendingName = fileName; pendingMime = mimeType;
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                            ? usb.createOpenDocumentTreeIntent()
+                            : new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                    usbTreeLauncher.launch(intent);
+                } catch (Exception e) {
+                    pendingBytes = null;
+                    notifyExport(jsonString("error:" + e.getMessage()));
+                }
+            });
+            return "picking";
         }
 
         /** Hands the file to the share sheet — the route when no folder is set. */

@@ -613,6 +613,18 @@ select:focus { outline: none; border-color: var(--accent); }
   </div>
 </div>
 
+<div id="export-modal" class="modal hidden">
+  <div class="modal-box" style="width:360px">
+    <div class="modal-title"><span>Save the deck to…</span><button class="modal-close" id="export-modal-close">✕</button></div>
+    <div style="display:grid;gap:8px;margin-top:14px">
+      <button id="export-phone-btn" class="btn accent" style="text-align:left">📱 This phone<br><small style="font-weight:400;opacity:.8">Download / bestWorshiper / BestWorshiper.pptx</small></button>
+      <button id="export-usb-btn" class="btn" style="text-align:left">🔌 USB drive<br><small style="font-weight:400;opacity:.8">Plug the drive in first; confirm the folder once</small></button>
+      <button id="export-dest-btn" class="btn hidden" style="text-align:left">📁 <span id="export-dest-name"></span><br><small style="font-weight:400;opacity:.8">The folder or file set in Settings</small></button>
+      <button id="export-share-btn" class="btn" style="text-align:left">↗ Share…<br><small style="font-weight:400;opacity:.8">OneDrive, KakaoTalk, mail and the rest</small></button>
+    </div>
+  </div>
+</div>
+
 <div id="text-export-modal" class="modal hidden">
   <div class="modal-box" style="width:480px">
     <div class="modal-title"><span>Records as text</span><button class="modal-close" id="text-export-close">✕</button></div>
@@ -736,7 +748,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.3.2';
+const APP_VERSION = '2.4.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1883,6 +1895,48 @@ async function quickPoint(kidId, delta, date, reason) {
 // ═══════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════
+// ── Where the exported deck goes (Android only) ──
+let pendingExport = null;   // {fileName, b64} while the chooser is open
+
+function openExportChooser(fileName, b64) {
+  pendingExport = { fileName, b64 };
+  const dest = document.getElementById('export-dest-btn');
+  let name = '';
+  try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
+  dest.classList.toggle('hidden', !name);
+  document.getElementById('export-dest-name').textContent = name;
+  document.getElementById('export-usb-btn').classList.toggle('hidden', !window.AndroidBridge.exportToUsb);
+  document.getElementById('export-phone-btn').classList.toggle('hidden', !window.AndroidBridge.saveToPhone);
+  document.getElementById('export-modal').classList.remove('hidden');
+}
+
+function closeExportChooser() {
+  document.getElementById('export-modal').classList.add('hidden');
+}
+
+/** Reports one of the bridge's save results the same way wherever the deck went. */
+function reportExport(problem, fileName, where) {
+  if (problem === '' || problem.startsWith('saved:')) {
+    showToast(`Saved to ${where}${problem ? ' — ' + problem.slice(6) : ''}.`);
+  } else if (problem === 'picking') {
+    // The picker is open; the USB result comes back through onExportResult.
+  } else if (problem === 'no-usb') {
+    showToast('No USB drive found — plug it into the phone and try again.');
+  } else if (problem === 'cancelled') {
+    showToast('Cancelled.');
+  } else if (problem.startsWith('renamed:')) {
+    showToast(`Saved as ${problem.slice(8)}, but the service deck links to ${fileName}. ` +
+              `Delete the other ${fileName} there and export again.`);
+  } else {
+    showToast(`Could not save to ${where} (${problem}).`);
+  }
+}
+
+window.onExportResult = result => {
+  const fileName = (pendingExport && pendingExport.fileName) || AWARD_PPTX_NAME;
+  reportExport(String(result), fileName, 'USB');
+};
+
 /** The destination folder is an Android-only concept, so it only shows there. */
 function renderDestination() {
   const card = document.getElementById('destination-card');
@@ -2773,27 +2827,9 @@ async function exportAwardPptx() {
       return;
     }
 
-    const b64 = base64FromBytes(bytes);
-    const problem = window.AndroidBridge.saveToDestination
-      ? window.AndroidBridge.saveToDestination(fileName, b64, PPTX_MIME, '')
-      : 'no-destination';
-
-    if (problem === '') {
-      let name = fileName;
-      try { name = window.AndroidBridge.destinationName() || fileName; } catch (e) {}
-      showToast(`Saved ${name}.`);
-    } else if (problem.startsWith('renamed:')) {
-      // Written, but under the name the provider gave it; the deck links by name.
-      showToast(`Saved as ${problem.slice(8)}, but the service deck links to ${fileName}. ` +
-                `Delete the other ${fileName} in OneDrive and export again — this file will take the name.`);
-    } else if (problem === 'no-destination') {
-      // No file chosen yet — hand it straight to the share sheet.
-      window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
-    } else {
-      // Most likely the grant on the chosen file lapsed; picking it again fixes that.
-      showToast('Could not write the chosen file (' + problem + ') — choose it again in Settings. Sharing instead.');
-      window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
-    }
+    // On the phone the deck can go several places; ask each time, since the
+    // USB drive is only plugged in on the way to church.
+    openExportChooser(fileName, base64FromBytes(bytes));
   } catch (e) {
     console.error(e);
     showToast('PPT export failed: ' + e.message);
@@ -3128,6 +3164,25 @@ document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
 document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
 document.getElementById('destination-pick-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.pickDestination) window.AndroidBridge.pickDestination();
+});
+document.getElementById('export-modal-close').addEventListener('click', closeExportChooser);
+document.getElementById('export-phone-btn').addEventListener('click', () => {
+  const { fileName, b64 } = pendingExport; closeExportChooser();
+  reportExport(window.AndroidBridge.saveToPhone(fileName, b64, PPTX_MIME), fileName, 'Download/bestWorshiper');
+});
+document.getElementById('export-usb-btn').addEventListener('click', () => {
+  const { fileName, b64 } = pendingExport; closeExportChooser();
+  reportExport(window.AndroidBridge.exportToUsb(fileName, b64, PPTX_MIME), fileName, 'USB');
+});
+document.getElementById('export-dest-btn').addEventListener('click', () => {
+  const { fileName, b64 } = pendingExport; closeExportChooser();
+  let name = fileName;
+  try { name = window.AndroidBridge.destinationName() || fileName; } catch (e) {}
+  reportExport(window.AndroidBridge.saveToDestination(fileName, b64, PPTX_MIME, ''), fileName, name);
+});
+document.getElementById('export-share-btn').addEventListener('click', () => {
+  const { fileName, b64 } = pendingExport; closeExportChooser();
+  window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
 });
 document.getElementById('destination-folder-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.pickDestinationFolder) window.AndroidBridge.pickDestinationFolder();
