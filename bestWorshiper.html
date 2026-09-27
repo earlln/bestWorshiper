@@ -619,7 +619,7 @@ select:focus { outline: none; border-color: var(--accent); }
     <div style="display:grid;gap:8px;margin-top:14px">
       <button id="export-phone-btn" class="btn accent" style="text-align:left">📱 This phone<br><small style="font-weight:400;opacity:.8">Download / bestWorshiper / BestWorshiper.pptx</small></button>
       <button id="export-usb-btn" class="btn" style="text-align:left">🔌 USB drive<br><small style="font-weight:400;opacity:.8">Plug the drive in first; confirm the folder once</small></button>
-      <button id="export-dest-btn" class="btn hidden" style="text-align:left">📁 <span id="export-dest-name"></span><br><small style="font-weight:400;opacity:.8">The folder or file set in Settings</small></button>
+      <button id="export-dest-btn" class="btn hidden" style="text-align:left">📁 <span id="export-dest-name"></span><br><small style="font-weight:400;opacity:.8">The folder set in Settings</small></button>
       <button id="export-share-btn" class="btn" style="text-align:left">↗ Share…<br><small style="font-weight:400;opacity:.8">OneDrive, KakaoTalk, mail and the rest</small></button>
     </div>
   </div>
@@ -685,22 +685,17 @@ select:focus { outline: none; border-color: var(--accent); }
         <p class="hint" style="margin-top:4px"><b>Android</b>: open in Chrome → menu (⋮) → "Add to Home screen" / "Install app"</p>
       </div>
       <div class="card hidden" id="destination-card">
-        <h3>📁 PPT file</h3>
-        <p class="hint"><b>Choose folder</b> and pick where the deck lives (e.g. OneDrive › EM › Service).
-        The first export creates <code>BestWorshiper.pptx</code> there and every later export
-        rewrites that same file, so the service deck's link keeps finding the new week.<br>
-        Make sure the folder holds no <code>BestWorshiper.pptx</code> before the first export —
-        OneDrive would file a clash as <code>BestWorshiper 1.pptx</code>.</p>
+        <h3>📁 Export folder</h3>
+        <p class="hint">Optional. <b>Choose folder</b> adds that folder (e.g. OneDrive › EM › Service) to the
+        choices offered when you export. The phone and a USB drive are always offered.</p>
         <div class="setting-row">
-          <div class="setting-key">Exports go to</div>
+          <div class="setting-key">Folder</div>
           <div><b id="destination-name">Not set</b></div>
         </div>
         <div class="row-actions">
           <button id="destination-folder-btn" class="btn accent">Choose folder</button>
-          <button id="destination-pick-btn" class="btn">Choose existing file</button>
           <button id="destination-clear-btn" class="btn">Clear</button>
         </div>
-        <p class="hint" style="margin-top:8px">With nothing set, exporting opens the share sheet instead. Install the OneDrive app and it appears in the picker.</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -748,7 +743,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.5.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1896,10 +1891,10 @@ async function quickPoint(kidId, delta, date, reason) {
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════
 // ── Where the exported deck goes (Android only) ──
-let pendingExport = null;   // {fileName, b64} while the chooser is open
+let pendingExport = null;   // {files: [{fileName, b64}, ...]} while the chooser is open
 
-function openExportChooser(fileName, b64) {
-  pendingExport = { fileName, b64 };
+function openExportChooser(deckName, deckB64, linkName, linkB64) {
+  pendingExport = { files: [{ fileName: deckName, b64: deckB64 }, { fileName: linkName, b64: linkB64 }] };
   const dest = document.getElementById('export-dest-btn');
   let name = '';
   try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
@@ -1914,28 +1909,29 @@ function closeExportChooser() {
   document.getElementById('export-modal').classList.add('hidden');
 }
 
-/** Reports one of the bridge's save results the same way wherever the deck went. */
-function reportExport(problem, fileName, where) {
-  if (problem === '' || problem.startsWith('saved:')) {
-    showToast(`Saved to ${where}${problem ? ' — ' + problem.slice(6) : ''}.`);
-  } else if (problem === 'picking') {
-    // The picker is open; the USB result comes back through onExportResult.
-  } else if (problem === 'no-usb') {
-    showToast('No USB drive found — plug it into the phone and try again.');
-  } else if (problem === 'cancelled') {
-    showToast('Cancelled.');
-  } else if (problem.startsWith('renamed:')) {
-    showToast(`Saved as ${problem.slice(8)}, but the service deck links to ${fileName}. ` +
-              `Delete the other ${fileName} there and export again.`);
-  } else {
-    showToast(`Could not save to ${where} (${problem}).`);
-  }
+/**
+ * Sends the deck and then the link slide to one bridge call, waiting on the
+ * picker when the first save opens it. The USB grant is held after that first
+ * save, so the second file goes straight through.
+ */
+function exportFilesWith(call, where) {
+  const files = pendingExport.files.slice();
+  const next = () => {
+    const f = files.shift();
+    if (!f) { showToast(`Saved to ${where}: ${pendingExport.files.map(x => x.fileName).join(', ')}`); return; }
+    let result = '';
+    try { result = String(call(f.fileName, f.b64)); } catch (e) { result = 'error:' + e.message; }
+    if (result === 'picking') { window.onExportResult = r => { window.onExportResult = null; settle(String(r), f); }; return; }
+    settle(result, f);
+  };
+  const settle = (result, f) => {
+    if (result === '' || result.startsWith('saved:')) { next(); return; }
+    if (result === 'no-usb') showToast('No USB drive found — plug it into the phone and try again.');
+    else if (result === 'cancelled') showToast('Cancelled.');
+    else showToast(`Could not save ${f.fileName} to ${where} (${result}).`);
+  };
+  next();
 }
-
-window.onExportResult = result => {
-  const fileName = (pendingExport && pendingExport.fileName) || AWARD_PPTX_NAME;
-  reportExport(String(result), fileName, 'USB');
-};
 
 /** The destination folder is an Android-only concept, so it only shows there. */
 function renderDestination() {
@@ -2646,6 +2642,37 @@ async function buildAwardPptx() {
   return zipStore(pptxParts(slides, photos));
 }
 
+/**
+ * A transparent shape over the whole slide carrying PowerPoint's "other
+ * presentation" action, so a click anywhere runs the deck it names and comes
+ * back here when that deck ends. Plain hyperlinks do not return.
+ */
+function pptLinkOverlay(rId) {
+  const id = ++shapeSeq;
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="link${id}">` +
+    `<a:hlinkClick r:id="${rId}" action="ppaction://hlinkpres?slideindex=1&amp;slidetitle="/></p:cNvPr>` +
+    '<p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
+    `<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${DECK_W}" cy="${DECK_H}"/></a:xfrm>` +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+    '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>' +
+    '<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>';
+}
+
+/**
+ * The one-slide bridge that goes at the end of the service deck: the title
+ * and a full-slide link to the dated deck beside it. Same canvas and colours
+ * as the deck, so it pastes in unscaled.
+ */
+function buildLinkSlidePptx(deckFileName) {
+  const slide = { xml: [
+    pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
+    pptText({ x: inEmu(1.2), y: inEmu(4.6), w: DECK_W - inEmu(2.4), h: inEmu(2.05),
+              lines: 'Best Worshiper 시상', size: 96, color: 'E8EAF6', bold: true, font: 'Malgun Gothic' }),
+    pptLinkOverlay('rId7'),
+  ], link: deckFileName };
+  return zipStore(pptxParts([slide], []));
+}
+
 /** Assembles the OOXML package around the generated slides. */
 function pptxParts(slides, photos) {
   const rel = (id, type, target) =>
@@ -2734,6 +2761,7 @@ function pptxParts(slides, photos) {
           rel('rId5', 'image', '../media/poster.png')
         : '') +
       (s.confetti ? rel('rId6', 'image', '../media/confetti.gif') : '') +
+      (s.link ? `<Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${xmlEscape(s.link)}" TargetMode="External"/>` : '') +
       '</Relationships>') });
   });
 
@@ -2803,8 +2831,10 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-/** Kept in step with the link in tools/link_slide — see that folder's README. */
-const AWARD_PPTX_NAME = 'BestWorshiper.pptx';
+/** The deck and the one-slide link that opens it, both dated so weeks never collide. */
+const awardStamp = () => state.currentWeekDate.replace(/-/g, '');
+const awardFileName = () => `BestWorshiper_${awardStamp()}.pptx`;
+const linkFileName = () => `시상링크_${awardStamp()}.pptx`;
 
 async function exportAwardPptx() {
   const saved = savedWeek();
@@ -2817,19 +2847,21 @@ async function exportAwardPptx() {
   btn.textContent = 'Building...';
   try {
     const bytes = await buildAwardPptx();
-    // A fixed name, written straight into the chosen folder. The service deck
-    // links to this file by name alone, so a dated name — or a dated subfolder —
-    // would break that link every week.
-    const fileName = AWARD_PPTX_NAME;
+    // The deck is dated, and so is the link slide that opens it: the service
+    // deck's link goes by name, so a fresh link slide goes out with every deck,
+    // to be pasted in as the service deck's last slide.
+    const fileName = awardFileName();
+    const link = { fileName: linkFileName(), bytes: buildLinkSlidePptx(fileName) };
 
     if (!IS_ANDROID_APP) {
       saveBinaryToDevice(fileName, bytes, PPTX_MIME);
+      saveBinaryToDevice(link.fileName, link.bytes, PPTX_MIME);
       return;
     }
 
     // On the phone the deck can go several places; ask each time, since the
     // USB drive is only plugged in on the way to church.
-    openExportChooser(fileName, base64FromBytes(bytes));
+    openExportChooser(fileName, base64FromBytes(bytes), link.fileName, base64FromBytes(link.bytes));
   } catch (e) {
     console.error(e);
     showToast('PPT export failed: ' + e.message);
@@ -3162,27 +3194,26 @@ document.getElementById('script-reset-btn').addEventListener('click', resetScrip
 
 document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
 document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
-document.getElementById('destination-pick-btn').addEventListener('click', () => {
-  if (IS_ANDROID_APP && window.AndroidBridge.pickDestination) window.AndroidBridge.pickDestination();
-});
 document.getElementById('export-modal-close').addEventListener('click', closeExportChooser);
 document.getElementById('export-phone-btn').addEventListener('click', () => {
-  const { fileName, b64 } = pendingExport; closeExportChooser();
-  reportExport(window.AndroidBridge.saveToPhone(fileName, b64, PPTX_MIME), fileName, 'Download/bestWorshiper');
+  closeExportChooser();
+  exportFilesWith((n, b) => window.AndroidBridge.saveToPhone(n, b, PPTX_MIME), 'Download/bestWorshiper');
 });
 document.getElementById('export-usb-btn').addEventListener('click', () => {
-  const { fileName, b64 } = pendingExport; closeExportChooser();
-  reportExport(window.AndroidBridge.exportToUsb(fileName, b64, PPTX_MIME), fileName, 'USB');
+  closeExportChooser();
+  exportFilesWith((n, b) => window.AndroidBridge.exportToUsb(n, b, PPTX_MIME), 'USB');
 });
 document.getElementById('export-dest-btn').addEventListener('click', () => {
-  const { fileName, b64 } = pendingExport; closeExportChooser();
-  let name = fileName;
-  try { name = window.AndroidBridge.destinationName() || fileName; } catch (e) {}
-  reportExport(window.AndroidBridge.saveToDestination(fileName, b64, PPTX_MIME, ''), fileName, name);
+  closeExportChooser();
+  let where = 'the chosen folder';
+  try { where = window.AndroidBridge.destinationName() || where; } catch (e) {}
+  exportFilesWith((n, b) => window.AndroidBridge.saveToDestination(n, b, PPTX_MIME, ''), where);
 });
 document.getElementById('export-share-btn').addEventListener('click', () => {
-  const { fileName, b64 } = pendingExport; closeExportChooser();
-  window.AndroidBridge.shareFile(fileName, b64, PPTX_MIME);
+  closeExportChooser();
+  // The share sheet takes one file at a time; the deck is the one that matters.
+  const deck = pendingExport.files[0];
+  window.AndroidBridge.shareFile(deck.fileName, deck.b64, PPTX_MIME);
 });
 document.getElementById('destination-folder-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.pickDestinationFolder) window.AndroidBridge.pickDestinationFolder();

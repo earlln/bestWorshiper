@@ -57,13 +57,10 @@ public class MainActivity extends AppCompatActivity {
     private Uri pendingCaptureUri;
 
     private static final String PREFS = "bestWorshiper";
-    // The deck file every export rewrites: either picked directly, or created
-    // by the first export inside a picked folder and pinned from then on.
-    private static final String KEY_FILE = "exportFileUri";
+    // An optional folder offered among the export targets.
     private static final String KEY_DEST = "destTreeUri";
     private static final String PPTX_MIME =
             "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-    private ActivityResultLauncher<String[]> pickFileLauncher;
     private ActivityResultLauncher<Uri> pickFolderLauncher;
 
     // A USB drive plugged into the phone is reached through the document
@@ -91,28 +88,13 @@ public class MainActivity extends AppCompatActivity {
                 new ActivityResultContracts.CaptureVideo(),
                 ok -> deliverToWeb(Boolean.TRUE.equals(ok) ? pendingCaptureUri : null));
 
-        // The export target is one file, rewritten every week. It can be picked
-        // directly, but on this phone the picker lists OneDrive without its
-        // files, and hides OneDrive altogether when asked to create a file — the
-        // folder picker is the one door that opens. So a folder can be chosen
-        // instead: the first export creates the deck there and pins its document
-        // URI, and later exports open that URI without any lookup by name, which
-        // OneDrive's provider answers from a stale listing.
-        ActivityResultCallback<Uri> rememberFile = uri -> {
-            if (uri == null) { notifyWeb('"' + "destCancelled" + '"'); return; }
-            persist(uri);
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putString(KEY_FILE, uri.toString()).remove(KEY_DEST).apply();
-            toast("Exports will overwrite " + describeFile(uri));
-            notifyWeb(jsonString(describeFile(uri)));
-        };
-        pickFileLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), rememberFile);
+        // Exports are dated, so a folder can simply be written into by name;
+        // nothing has to be looked up or replaced there.
         pickFolderLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
             if (uri == null) { notifyWeb('"' + "destCancelled" + '"'); return; }
             persist(uri);
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putString(KEY_DEST, uri.toString()).remove(KEY_FILE).apply();   // a new folder means a new file
-            toast("Exports will go to " + describeTree(uri));
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_DEST, uri.toString()).apply();
+            toast("Exports can go to " + describeTree(uri));
             notifyWeb(jsonString(describeTree(uri)));
         });
 
@@ -371,19 +353,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        /** Asks for the existing deck file that every export should overwrite. */
-        @JavascriptInterface
-        public void pickDestination() {
-            runOnUiThread(() -> {
-                try {
-                    pickFileLauncher.launch(new String[]{"*/*"});
-                } catch (Exception e) {
-                    toast("Could not open the file picker: " + e.getMessage());
-                }
-            });
-        }
-
-        /** Asks for the folder the deck should live in; the first export creates it there. */
+        /** Asks for a folder to offer among the export targets. */
         @JavascriptInterface
         public void pickDestinationFolder() {
             runOnUiThread(() -> {
@@ -395,73 +365,35 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        /** What exports go to — the file's name, or the folder's until the first export. */
+        /** The chosen folder's name, or "" when none is set. */
         @JavascriptInterface
         public String destinationName() {
-            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-            String file = prefs.getString(KEY_FILE, null);
-            if (file != null) { try { return describeFile(Uri.parse(file)); } catch (Exception e) { /* below */ } }
-            String dir = prefs.getString(KEY_DEST, null);
-            if (dir != null) { try { return describeTree(Uri.parse(dir)) + " (folder)"; } catch (Exception e) { /* below */ } }
-            return "";
+            String dir = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
+            if (dir == null) return "";
+            try { return describeTree(Uri.parse(dir)); } catch (Exception e) { return ""; }
         }
 
         @JavascriptInterface
         public void clearDestination() {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_FILE).remove(KEY_DEST).apply();
-            toast("Export destination cleared.");
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_DEST).apply();
+            toast("Export folder cleared.");
         }
 
         /**
-         * Rewrites the deck file. With a folder chosen and no file pinned yet, the
-         * file is looked up or created there first and pinned. Returns "" on
-         * success or a reason, so the page can fall back to sharing rather than
-         * leave the user with nothing.
+         * Writes a file into the chosen folder. Returns "" on success or a reason,
+         * so the page can say what happened. subPath is unused; it stays in the
+         * signature the page calls.
          */
         @JavascriptInterface
         public String saveToDestination(String fileName, String base64Data,
                                         String mimeType, String subPath) {
-            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+            String tree = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
+            if (tree == null) return "no-destination";
             try {
-                Uri uri = null;
-                String pinned = prefs.getString(KEY_FILE, null);
-                if (pinned != null) uri = Uri.parse(pinned);
-
-                if (uri == null) {
-                    String tree = prefs.getString(KEY_DEST, null);
-                    if (tree == null) return "no-destination";
-                    DocumentFile dir = DocumentFile.fromTreeUri(this_(), Uri.parse(tree));
-                    if (dir == null || !dir.canWrite()) return "not-writable";
-                    DocumentFile file = dir.findFile(fileName);
-                    if (file == null || !file.isFile()) file = dir.createFile(mimeType, fileName);
-                    if (file == null) return "create-failed";
-                    uri = file.getUri();
-                    prefs.edit().putString(KEY_FILE, uri.toString()).apply();
-                }
-
-                byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
-                if (!writeAll(uri, bytes)) {
-                    // A pinned file that can no longer be written has gone or lost
-                    // its grant; forget it so the next export re-creates it.
-                    if (pinned != null) prefs.edit().remove(KEY_FILE).apply();
-                    return "stream-failed";
-                }
-
-                // When the file was created next to one of the same name, the
-                // provider filed it as "BestWorshiper 1.pptx"; the deck's link
-                // goes by name, so take the intended name back once the other
-                // file is out of the way. Until then, say which name it has.
-                String name = describeFile(uri);
-                if (!fileName.equals(name)) {
-                    DocumentFile f = DocumentFile.fromSingleUri(this_(), uri);
-                    if (f != null && f.renameTo(fileName)) {
-                        uri = f.getUri();
-                        prefs.edit().putString(KEY_FILE, uri.toString()).apply();
-                        name = describeFile(uri);
-                    }
-                }
-                toast("Saved " + name);
-                return fileName.equals(name) ? "" : "renamed:" + name;
+                String saved = writeIntoTree(Uri.parse(tree), fileName, mimeType,
+                        Base64.decode(base64Data, Base64.DEFAULT));
+                toast("Saved " + saved);
+                return "";
             } catch (Exception e) {
                 return "error:" + e.getMessage();
             }
