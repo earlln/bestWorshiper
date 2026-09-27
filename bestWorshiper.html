@@ -684,6 +684,16 @@ select:focus { outline: none; border-color: var(--accent); }
         <p class="hint"><b>iPhone</b>: open in Safari → Share → "Add to Home Screen"</p>
         <p class="hint" style="margin-top:4px"><b>Android</b>: open in Chrome → menu (⋮) → "Add to Home screen" / "Install app"</p>
       </div>
+      <div class="card">
+        <h3>📂 Deck folder</h3>
+        <p class="hint">The folder the deck goes into, relative to the service deck — on the USB stick
+        the service deck sits at the top and the deck under this folder. The link slide points
+        there, and phone and USB exports save there. Leave empty to keep them side by side.</p>
+        <div class="setting-row">
+          <div class="setting-key">Subfolder</div>
+          <div><input type="text" id="settings-deck-subfolder" value="EM" style="width:120px"></div>
+        </div>
+      </div>
       <div class="card hidden" id="destination-card">
         <h3>📁 Export folder</h3>
         <p class="hint">Optional. <b>Choose folder</b> adds that folder (e.g. OneDrive › EM › Service) to the
@@ -743,7 +753,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -825,6 +835,7 @@ const DEFAULT_SETTINGS = {
   streakWeeks: 4,  // consecutive candidate weeks that still earn a bonus
   streakBonus: 1,  // points per consecutive week beyond the first
   ceremonyScript: DEFAULT_SCRIPT,
+  deckSubfolder: 'EM',   // where the deck sits, relative to the service deck
 };
 
 const state = {
@@ -1893,8 +1904,8 @@ async function quickPoint(kidId, delta, date, reason) {
 // ── Where the exported deck goes (Android only) ──
 let pendingExport = null;   // {files: [{fileName, b64}, ...]} while the chooser is open
 
-function openExportChooser(deckName, deckB64, linkName, linkB64) {
-  pendingExport = { files: [{ fileName: deckName, b64: deckB64 }, { fileName: linkName, b64: linkB64 }] };
+function openExportChooser(deckName, deckB64, linkName, linkB64, sub) {
+  pendingExport = { sub, files: [{ fileName: deckName, b64: deckB64 }, { fileName: linkName, b64: linkB64 }] };
   const dest = document.getElementById('export-dest-btn');
   let name = '';
   try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
@@ -1916,6 +1927,7 @@ function closeExportChooser() {
  */
 function exportFilesWith(call, where) {
   const files = pendingExport.files.slice();
+  if (pendingExport.sub) where += '/' + pendingExport.sub;
   const next = () => {
     const f = files.shift();
     if (!f) { showToast(`Saved to ${where}: ${pendingExport.files.map(x => x.fileName).join(', ')}`); return; }
@@ -1952,6 +1964,7 @@ window.onDestinationPicked = () => {
 
 function renderSettingsTab() {
   renderDestination();
+  document.getElementById('settings-deck-subfolder').value = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder;
   state.decayDraft = state.settings.decayWeeks ?? DEFAULT_SETTINGS.decayWeeks;
   state.streakWeeksDraft = state.settings.streakWeeks ?? DEFAULT_SETTINGS.streakWeeks;
   state.streakBonusDraft = state.settings.streakBonus ?? DEFAULT_SETTINGS.streakBonus;
@@ -1959,6 +1972,11 @@ function renderSettingsTab() {
   document.getElementById('settings-streak-weeks-display').textContent = state.streakWeeksDraft;
   document.getElementById('settings-streak-bonus-display').textContent = fmtNum(state.streakBonusDraft);
   renderStreakPreview();
+}
+
+/** The deck's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
+function deckSubfolder(raw = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder) {
+  return String(raw || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
 }
 
 function renderStreakPreview() {
@@ -2002,6 +2020,7 @@ async function saveSettings() {
   await dbPut('settings', { key: 'decayWeeks', value: state.decayDraft });
   await dbPut('settings', { key: 'streakWeeks', value: state.streakWeeksDraft });
   await dbPut('settings', { key: 'streakBonus', value: state.streakBonusDraft });
+  await dbPut('settings', { key: 'deckSubfolder', value: deckSubfolder(document.getElementById('settings-deck-subfolder').value) });
   await loadAll();
   showToast('Settings saved.');
   refreshAllTabs();
@@ -2851,7 +2870,9 @@ async function exportAwardPptx() {
     // deck's link goes by name, so a fresh link slide goes out with every deck,
     // to be pasted in as the service deck's last slide.
     const fileName = awardFileName();
-    const link = { fileName: linkFileName(), bytes: buildLinkSlidePptx(fileName) };
+    const sub = deckSubfolder();
+    // The link is relative to the service deck, which sits above the deck folder.
+    const link = { fileName: linkFileName(), bytes: buildLinkSlidePptx(sub ? `${sub}/${fileName}` : fileName) };
 
     if (!IS_ANDROID_APP) {
       saveBinaryToDevice(fileName, bytes, PPTX_MIME);
@@ -2861,7 +2882,7 @@ async function exportAwardPptx() {
 
     // On the phone the deck can go several places; ask each time, since the
     // USB drive is only plugged in on the way to church.
-    openExportChooser(fileName, base64FromBytes(bytes), link.fileName, base64FromBytes(link.bytes));
+    openExportChooser(fileName, base64FromBytes(bytes), link.fileName, base64FromBytes(link.bytes), sub);
   } catch (e) {
     console.error(e);
     showToast('PPT export failed: ' + e.message);
@@ -3197,17 +3218,17 @@ document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
 document.getElementById('export-modal-close').addEventListener('click', closeExportChooser);
 document.getElementById('export-phone-btn').addEventListener('click', () => {
   closeExportChooser();
-  exportFilesWith((n, b) => window.AndroidBridge.saveToPhone(n, b, PPTX_MIME), 'Download/bestWorshiper');
+  exportFilesWith((n, b) => window.AndroidBridge.saveToPhone(n, b, PPTX_MIME, pendingExport.sub), 'Download/bestWorshiper');
 });
 document.getElementById('export-usb-btn').addEventListener('click', () => {
   closeExportChooser();
-  exportFilesWith((n, b) => window.AndroidBridge.exportToUsb(n, b, PPTX_MIME), 'USB');
+  exportFilesWith((n, b) => window.AndroidBridge.exportToUsb(n, b, PPTX_MIME, pendingExport.sub), 'USB');
 });
 document.getElementById('export-dest-btn').addEventListener('click', () => {
   closeExportChooser();
   let where = 'the chosen folder';
   try { where = window.AndroidBridge.destinationName() || where; } catch (e) {}
-  exportFilesWith((n, b) => window.AndroidBridge.saveToDestination(n, b, PPTX_MIME, ''), where);
+  exportFilesWith((n, b) => window.AndroidBridge.saveToDestination(n, b, PPTX_MIME, pendingExport.sub), where);
 });
 document.getElementById('export-share-btn').addEventListener('click', () => {
   closeExportChooser();

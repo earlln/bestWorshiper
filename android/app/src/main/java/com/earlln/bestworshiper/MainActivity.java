@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_USB = "usbTreeUri";
     private static final String PHONE_DIR = "bestWorshiper";   // under Download/
     private ActivityResultLauncher<Intent> usbTreeLauncher;
-    private byte[] pendingBytes; private String pendingName, pendingMime;
+    private byte[] pendingBytes; private String pendingName, pendingMime, pendingSub;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,13 +101,13 @@ public class MainActivity extends AppCompatActivity {
         usbTreeLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(), result -> {
             Uri tree = result.getData() != null ? result.getData().getData() : null;
-            byte[] bytes = pendingBytes; String name = pendingName, mime = pendingMime;
-            pendingBytes = null; pendingName = null; pendingMime = null;
+            byte[] bytes = pendingBytes; String name = pendingName, mime = pendingMime, sub = pendingSub;
+            pendingBytes = null; pendingName = null; pendingMime = null; pendingSub = null;
             if (tree == null || bytes == null) { notifyExport(jsonString("cancelled")); return; }
             persist(tree);
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_USB, tree.toString()).apply();
             try {
-                String saved = writeIntoTree(tree, name, mime, bytes);
+                String saved = writeIntoTree(tree, sub, name, mime, bytes);
                 toast("Saved to USB: " + saved);
                 notifyExport(jsonString("saved:" + saved));
             } catch (Exception e) {
@@ -223,10 +223,20 @@ public class MainActivity extends AppCompatActivity {
                 "window.onExportResult && window.onExportResult(" + jsonArg + ")", null));
     }
 
-    /** Rewrites fileName inside a folder we hold a grant on, creating it the first time. */
-    private String writeIntoTree(Uri tree, String fileName, String mime, byte[] bytes) throws Exception {
+    /**
+     * Rewrites fileName under subPath ("EM", or "" for the folder itself) inside
+     * a folder we hold a grant on, creating folders and file as needed.
+     */
+    private String writeIntoTree(Uri tree, String subPath, String fileName, String mime, byte[] bytes) throws Exception {
         DocumentFile dir = DocumentFile.fromTreeUri(this, tree);
         if (dir == null || !dir.canWrite()) throw new IllegalStateException("folder not writable");
+        for (String part : (subPath == null ? "" : subPath).split("/")) {
+            if (part.isEmpty()) continue;
+            DocumentFile next = dir.findFile(part);
+            if (next == null || !next.isDirectory()) next = dir.createDirectory(part);
+            if (next == null) throw new IllegalStateException("could not create folder " + part);
+            dir = next;
+        }
         DocumentFile file = dir.findFile(fileName);
         if (file == null || !file.isFile()) file = dir.createFile(mime, fileName);
         if (file == null) throw new IllegalStateException("could not create file");
@@ -380,9 +390,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         /**
-         * Writes a file into the chosen folder. Returns "" on success or a reason,
-         * so the page can say what happened. subPath is unused; it stays in the
-         * signature the page calls.
+         * Writes a file under subPath inside the chosen folder. Returns "" on
+         * success or a reason, so the page can say what happened.
          */
         @JavascriptInterface
         public String saveToDestination(String fileName, String base64Data,
@@ -390,7 +399,7 @@ public class MainActivity extends AppCompatActivity {
             String tree = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEST, null);
             if (tree == null) return "no-destination";
             try {
-                String saved = writeIntoTree(Uri.parse(tree), fileName, mimeType,
+                String saved = writeIntoTree(Uri.parse(tree), subPath, fileName, mimeType,
                         Base64.decode(base64Data, Base64.DEFAULT));
                 toast("Saved " + saved);
                 return "";
@@ -425,10 +434,11 @@ public class MainActivity extends AppCompatActivity {
          * replacing the previous week's. Returns "" or a reason.
          */
         @JavascriptInterface
-        public String saveToPhone(String fileName, String base64Data, String mimeType) {
+        public String saveToPhone(String fileName, String base64Data, String mimeType, String subPath) {
             try {
                 byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
-                String where = "Download/" + PHONE_DIR + "/";
+                String sub = subPath == null ? "" : subPath.replaceAll("^/+|/+$", "");
+                String where = "Download/" + PHONE_DIR + "/" + (sub.isEmpty() ? "" : sub + "/");
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     Uri collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI;
                     // Our earlier copy can be deleted; one left by a previous install
@@ -463,7 +473,7 @@ public class MainActivity extends AppCompatActivity {
                     return fileName.equals(name) ? "" : "renamed:" + name;
                 } else {
                     File dir = new File(Environment.getExternalStoragePublicDirectory(
-                            Environment.DIRECTORY_DOWNLOADS), PHONE_DIR);
+                            Environment.DIRECTORY_DOWNLOADS), PHONE_DIR + (sub.isEmpty() ? "" : "/" + sub));
                     if (!dir.exists() && !dir.mkdirs()) return "mkdir-failed";
                     try (OutputStream out = new FileOutputStream(new File(dir, fileName))) {
                         out.write(bytes);
@@ -483,7 +493,7 @@ public class MainActivity extends AppCompatActivity {
          * through window.onExportResult. "no-usb" when nothing is plugged in.
          */
         @JavascriptInterface
-        public String exportToUsb(String fileName, String base64Data, String mimeType) {
+        public String exportToUsb(String fileName, String base64Data, String mimeType, String subPath) {
             StorageVolume usb = usbVolume();
             if (usb == null) return "no-usb";
             byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
@@ -491,13 +501,13 @@ public class MainActivity extends AppCompatActivity {
             String held = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_USB, null);
             if (held != null) {
                 try {
-                    String saved = writeIntoTree(Uri.parse(held), fileName, mimeType, bytes);
+                    String saved = writeIntoTree(Uri.parse(held), subPath, fileName, mimeType, bytes);
                     toast("Saved to USB: " + saved);
                     return "saved:" + saved;
                 } catch (Exception e) { /* a different drive, or the grant lapsed — ask again */ }
             }
 
-            pendingBytes = bytes; pendingName = fileName; pendingMime = mimeType;
+            pendingBytes = bytes; pendingName = fileName; pendingMime = mimeType; pendingSub = subPath;
             runOnUiThread(() -> {
                 try {
                     Intent intent = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
