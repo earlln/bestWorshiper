@@ -1976,7 +1976,7 @@ function renderSettingsTab() {
 
 /** The deck's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
 function deckSubfolder(raw = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder) {
-  return String(raw || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
+  return String(raw || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
 }
 
 function renderStreakPreview() {
