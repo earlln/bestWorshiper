@@ -10,8 +10,8 @@ android {
         applicationId "com.earlln.bestworshiper"
         minSdk 24
         targetSdk 34
-        versionCode 28
-        versionName "2.5.1"
+        versionCode 29
+        versionName "2.5.2"
     }
 
     // Release builds are signed with the same key the earlier sideloaded APKs

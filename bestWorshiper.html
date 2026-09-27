@@ -686,9 +686,14 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
       <div class="card">
         <h3>📂 Deck folder</h3>
-        <p class="hint">The folder the deck goes into, relative to the service deck — on the USB stick
-        the service deck sits at the top and the deck under this folder. The link slide points
-        there, and phone and USB exports save there. Leave empty to keep them side by side.</p>
+        <p class="hint">Where the deck lives on the USB stick, and the drive letter the stick gets on the
+        church PC. The link slide points at <code>M:\EM\BestWorshiper_….pptx</code>, so the service
+        deck can be anywhere on that PC. Phone and USB exports save under the subfolder.<br>
+        Leave the drive letter empty to link relative to the service deck instead.</p>
+        <div class="setting-row">
+          <div class="setting-key">Drive letter</div>
+          <div><input type="text" id="settings-deck-drive" value="M" maxlength="2" style="width:60px"></div>
+        </div>
         <div class="setting-row">
           <div class="setting-key">Subfolder</div>
           <div><input type="text" id="settings-deck-subfolder" value="EM" style="width:120px"></div>
@@ -753,7 +758,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.5.1';
+const APP_VERSION = '2.5.2';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -835,7 +840,8 @@ const DEFAULT_SETTINGS = {
   streakWeeks: 4,  // consecutive candidate weeks that still earn a bonus
   streakBonus: 1,  // points per consecutive week beyond the first
   ceremonyScript: DEFAULT_SCRIPT,
-  deckSubfolder: 'EM',   // where the deck sits, relative to the service deck
+  deckSubfolder: 'EM',   // where the deck sits on the stick
+  deckDrive: 'M',        // the stick's drive letter on the church PC; empty = link relative to the service deck
 };
 
 const state = {
@@ -1965,6 +1971,7 @@ window.onDestinationPicked = () => {
 function renderSettingsTab() {
   renderDestination();
   document.getElementById('settings-deck-subfolder').value = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder;
+  document.getElementById('settings-deck-drive').value = state.settings.deckDrive ?? DEFAULT_SETTINGS.deckDrive;
   state.decayDraft = state.settings.decayWeeks ?? DEFAULT_SETTINGS.decayWeeks;
   state.streakWeeksDraft = state.settings.streakWeeks ?? DEFAULT_SETTINGS.streakWeeks;
   state.streakBonusDraft = state.settings.streakBonus ?? DEFAULT_SETTINGS.streakBonus;
@@ -1977,6 +1984,23 @@ function renderSettingsTab() {
 /** The deck's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
 function deckSubfolder(raw = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder) {
   return String(raw || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
+}
+
+/** A single drive letter, upper-cased, or "" for a relative link. */
+function deckDrive(raw = state.settings.deckDrive ?? DEFAULT_SETTINGS.deckDrive) {
+  const m = String(raw || '').trim().toUpperCase().match(/^([A-Z]):?$/);
+  return m ? m[1] : '';
+}
+
+/**
+ * What the link slide points at. With a drive letter it is the absolute path
+ * on the church PC as a file URI, so the service deck may sit anywhere there;
+ * without one it is relative to the service deck.
+ */
+function deckLinkTarget(deckName) {
+  const sub = deckSubfolder(), drive = deckDrive();
+  const rel = sub ? `${sub}/${deckName}` : deckName;
+  return drive ? `file:///${drive}:/${rel.split('/').map(encodeURIComponent).join('/')}` : rel;
 }
 
 function renderStreakPreview() {
@@ -2021,6 +2045,7 @@ async function saveSettings() {
   await dbPut('settings', { key: 'streakWeeks', value: state.streakWeeksDraft });
   await dbPut('settings', { key: 'streakBonus', value: state.streakBonusDraft });
   await dbPut('settings', { key: 'deckSubfolder', value: deckSubfolder(document.getElementById('settings-deck-subfolder').value) });
+  await dbPut('settings', { key: 'deckDrive', value: deckDrive(document.getElementById('settings-deck-drive').value) });
   await loadAll();
   showToast('Settings saved.');
   refreshAllTabs();
@@ -2871,8 +2896,7 @@ async function exportAwardPptx() {
     // to be pasted in as the service deck's last slide.
     const fileName = awardFileName();
     const sub = deckSubfolder();
-    // The link is relative to the service deck, which sits above the deck folder.
-    const link = { fileName: linkFileName(), bytes: buildLinkSlidePptx(sub ? `${sub}/${fileName}` : fileName) };
+    const link = { fileName: linkFileName(), bytes: buildLinkSlidePptx(deckLinkTarget(fileName)) };
 
     if (!IS_ANDROID_APP) {
       saveBinaryToDevice(fileName, bytes, PPTX_MIME);
