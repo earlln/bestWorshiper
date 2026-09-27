@@ -106,10 +106,16 @@ jobs:
           fi
           echo "서명 키 일치"
 
+      # The artifact is a convenience for builds that publish nothing; a release
+      # carries the APK itself. Kept short-lived and non-fatal, since the
+      # account's artifact storage filling up once blocked a release.
       - uses: actions/upload-artifact@v4
+        if: steps.rel.outputs.tag == ''
+        continue-on-error: true
         with:
           name: bestWorshiper-apk
           path: ${{ steps.apk.outputs.path }}
+          retention-days: 3
 
       - name: Publish the release
         if: steps.rel.outputs.tag != ''
