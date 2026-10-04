@@ -41,16 +41,19 @@ OneDrive 가 설치되어 있지 않아도 상관없습니다 — USB 로 폴더
 
 | 파일 | 용도 |
 |---|---|
-| `BestWorshiper_20261004.pptx` | 그 주의 시상 덱 (소리·꽃가루 포함) — 기록용 |
-| `BestWorshiper.pptx` | 같은 덱의 **최신본 사본** — 링크가 여는 파일 |
-| `시상링크.pptx` | `M:\EM\BestWorshiper.pptx` 를 가리키는 링크 슬라이드 1장 — **한 번만** 붙여넣음 |
+| `BestWorshiper_20261004.pptx` | 그 주의 시상 덱 (소리·꽃가루 포함) |
+| `BestWorshiper.pptx` | **런처** 1장 — 그 주 덱의 제목 장이며, 클릭하면 날짜 덱을 2번 장부터 엽니다. 매주 앱이 새로 씀 |
+| `시상링크.pptx` | `M:\EM\BestWorshiper.pptx`(런처)를 가리키는 링크 슬라이드 — **한 번만** 붙여넣음 |
+
+흐름: 예배 PPT 마지막 장 클릭 → 런처(제목) → 클릭 → 날짜 덱(후보 명단부터) → 끝나면 런처로
+복귀 → **→ 키**로 예배 PPT 로 복귀. (런처에서 마우스를 다시 클릭하면 덱이 또 열리니 → 키를 쓰세요.)
 
 1. 파일 배치 — 앱 설정의 **Deck folder**(기본 `EM`) 기준입니다:
    ```
    USB (M:)
    └─ EM/
-      ├─ BestWorshiper_20261004.pptx   ← 기록
-      ├─ BestWorshiper.pptx            ← 최신본, 링크가 여는 파일
+      ├─ BestWorshiper_20261004.pptx   ← 그 주 덱
+      ├─ BestWorshiper.pptx            ← 런처(제목 1장), 링크가 여는 파일
       └─ 시상링크.pptx                  ← 예배 PPT 에 한 번만 붙여넣음
    ```
    USB 로 내보내면 앱이 `EM/` 아래에 저장합니다. 링크는 설정의 **Drive letter**(기본 `M`)

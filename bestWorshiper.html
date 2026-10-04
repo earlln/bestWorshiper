@@ -689,9 +689,9 @@ select:focus { outline: none; border-color: var(--accent); }
       <div class="card">
         <h3>📂 Deck folder</h3>
         <p class="hint">Where the deck lives on the USB stick, and the drive letter the stick gets on the
-        church PC. Every export writes the dated deck plus <code>BestWorshiper.pptx</code>, the latest
-        copy, and the link slide (<code>시상링크.pptx</code>) points at <code>M:\EM\BestWorshiper.pptx</code> —
-        paste that slide into the service deck once and it keeps opening the newest week.<br>
+        church PC. Every export writes the dated deck and rewrites <code>BestWorshiper.pptx</code>, a
+        one-slide launcher that opens that week's dated deck. The link slide (<code>시상링크.pptx</code>)
+        points at <code>M:\EM\BestWorshiper.pptx</code> — paste it into the service deck once.<br>
         Leave the drive letter empty to link relative to the service deck instead.</p>
         <div class="setting-row">
           <div class="setting-key">Drive letter</div>
@@ -761,7 +761,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.6.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2606,6 +2606,29 @@ async function photoForSlide(kid, size = 900) {
   }
 }
 
+/** The opening slide, shared with the launcher so the two look the same. */
+function titleSlideShapes(winnerCount, when) {
+  const GOLD = 'FFD740', TEXT = 'E8EAF6', DIM = '8A8D9E';
+  return [
+    pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
+    pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
+    pptText({ x: 0, y: inEmu(4.2), w: DECK_W, h: inEmu(1.8), lines: 'Best Worshiper', size: 96, color: GOLD, bold: true }),
+    pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.0), lines: when, size: 40, color: DIM }),
+    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: meetTodayLine(winnerCount), size: 40, color: TEXT }),
+  ];
+}
+
+/**
+ * The launcher the service deck links to: this week's title slide, and a
+ * click anywhere runs the dated deck from its second slide, so the title is
+ * not shown twice. When that deck ends the show returns here; the next → key
+ * ends the launcher and lands back in the service deck.
+ */
+function buildLauncherPptx(deckFileName, winnerCount, when) {
+  const slide = { xml: [...titleSlideShapes(winnerCount, when), pptLinkOverlay('rId7', 2)], link: deckFileName };
+  return zipStore(pptxParts([slide], []));
+}
+
 async function buildAwardPptx() {
   const saved = savedWeek();
   const winners = saved.winnerIds.map(id => kidById(id));
@@ -2619,14 +2642,7 @@ async function buildAwardPptx() {
   const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
 
   // 1. Title
-  const meetLine = meetTodayLine(winners.length);
-  slides.push({ xml: [
-    bg(),
-    pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
-    pptText({ x: 0, y: inEmu(4.2), w: DECK_W, h: inEmu(1.8), lines: 'Best Worshiper', size: 96, color: GOLD, bold: true }),
-    pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.0), lines: when, size: 40, color: DIM }),
-    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: meetLine, size: 40, color: TEXT }),
-  ] });
+  slides.push({ xml: titleSlideShapes(winners.length, when) });
 
   // 2. Nominees
   if (nominees.length) {
@@ -2704,10 +2720,10 @@ async function buildAwardPptx() {
  * presentation" action, so a click anywhere runs the deck it names and comes
  * back here when that deck ends. Plain hyperlinks do not return.
  */
-function pptLinkOverlay(rId) {
+function pptLinkOverlay(rId, slideIndex = 1) {
   const id = ++shapeSeq;
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="link${id}">` +
-    `<a:hlinkClick r:id="${rId}" action="ppaction://hlinkpres?slideindex=1&amp;slidetitle="/></p:cNvPr>` +
+    `<a:hlinkClick r:id="${rId}" action="ppaction://hlinkpres?slideindex=${slideIndex}&amp;slidetitle="/></p:cNvPr>` +
     '<p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
     `<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${DECK_W}" cy="${DECK_H}"/></a:xfrm>` +
     '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
@@ -2889,13 +2905,15 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 /**
- * Each export writes the dated deck for the record and a copy under one fixed
- * name, which is what the link slide points at — so the slide pasted into the
- * service deck keeps opening the latest week without being replaced.
+ * The deck is dated. A link in the service deck cannot find "the newest" file
+ * by itself, so each export also rewrites BestWorshiper.pptx: a one-slide
+ * launcher — the deck's title slide — whose link opens that week's dated deck
+ * from its second slide. The slide pasted into the service deck points at the
+ * launcher and so never needs replacing.
  */
 const awardStamp = () => state.currentWeekDate.replace(/-/g, '');
 const awardFileName = () => `BestWorshiper_${awardStamp()}.pptx`;
-const LATEST_DECK_NAME = 'BestWorshiper.pptx';
+const LAUNCHER_NAME = 'BestWorshiper.pptx';
 const LINK_SLIDE_NAME = '시상링크.pptx';
 
 async function exportAwardPptx() {
@@ -2915,8 +2933,9 @@ async function exportAwardPptx() {
     const sub = deckSubfolder();
     const files = [
       { fileName: awardFileName(), bytes },
-      { fileName: LATEST_DECK_NAME, bytes },
-      { fileName: LINK_SLIDE_NAME, bytes: buildLinkSlidePptx(deckLinkTarget(LATEST_DECK_NAME)) },
+      // The launcher sits beside the deck, so it links by bare file name.
+      { fileName: LAUNCHER_NAME, bytes: buildLauncherPptx(awardFileName(), saved.winnerIds.length, state.currentWeekDate) },
+      { fileName: LINK_SLIDE_NAME, bytes: buildLinkSlidePptx(deckLinkTarget(LAUNCHER_NAME)) },
     ];
 
     if (!IS_ANDROID_APP) {
