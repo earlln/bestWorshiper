@@ -688,15 +688,8 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
       <div class="card">
         <h3>📂 Deck folder</h3>
-        <p class="hint">Where the deck lives on the USB stick, and the drive letter the stick gets on the
-        church PC. Every export writes the dated deck and rewrites <code>BestWorshiper.pptx</code>, a
-        one-slide launcher that opens that week's dated deck. The link slide (<code>시상링크.pptx</code>)
-        points at <code>M:\EM\BestWorshiper.pptx</code> — paste it into the service deck once.<br>
-        Leave the drive letter empty to link relative to the service deck instead.</p>
-        <div class="setting-row">
-          <div class="setting-key">Drive letter</div>
-          <div><input type="text" id="settings-deck-drive" value="M" maxlength="2" style="width:60px"></div>
-        </div>
+        <p class="hint">The folder on the USB stick (or under Download/bestWorshiper on the phone) that
+        <code>BestWorshiper_날짜.pptx</code> is saved into. Leave empty to save at the top.</p>
         <div class="setting-row">
           <div class="setting-key">Subfolder</div>
           <div><input type="text" id="settings-deck-subfolder" value="EM" style="width:120px"></div>
@@ -761,7 +754,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.6.2';
+const APP_VERSION = '2.7.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -843,8 +836,7 @@ const DEFAULT_SETTINGS = {
   streakWeeks: 4,  // consecutive candidate weeks that still earn a bonus
   streakBonus: 1,  // points per consecutive week beyond the first
   ceremonyScript: DEFAULT_SCRIPT,
-  deckSubfolder: 'EM',   // where the deck sits on the stick
-  deckDrive: 'M',        // the stick's drive letter on the church PC; empty = link relative to the service deck
+  deckSubfolder: 'EM',   // folder on the stick or phone the deck is saved into
 };
 
 const state = {
@@ -1989,7 +1981,7 @@ window.onDestinationPicked = () => {
 function renderSettingsTab() {
   renderDestination();
   document.getElementById('settings-deck-subfolder').value = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder;
-  document.getElementById('settings-deck-drive').value = state.settings.deckDrive ?? DEFAULT_SETTINGS.deckDrive;
+
   state.decayDraft = state.settings.decayWeeks ?? DEFAULT_SETTINGS.decayWeeks;
   state.streakWeeksDraft = state.settings.streakWeeks ?? DEFAULT_SETTINGS.streakWeeks;
   state.streakBonusDraft = state.settings.streakBonus ?? DEFAULT_SETTINGS.streakBonus;
@@ -2002,23 +1994,6 @@ function renderSettingsTab() {
 /** The deck's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
 function deckSubfolder(raw = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder) {
   return String(raw || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
-}
-
-/** A single drive letter, upper-cased, or "" for a relative link. */
-function deckDrive(raw = state.settings.deckDrive ?? DEFAULT_SETTINGS.deckDrive) {
-  const m = String(raw || '').trim().toUpperCase().match(/^([A-Z]):?$/);
-  return m ? m[1] : '';
-}
-
-/**
- * What the link slide points at. With a drive letter it is the absolute path
- * on the church PC as a file URI, so the service deck may sit anywhere there;
- * without one it is relative to the service deck.
- */
-function deckLinkTarget(deckName) {
-  const sub = deckSubfolder(), drive = deckDrive();
-  const rel = sub ? `${sub}/${deckName}` : deckName;
-  return drive ? `file:///${drive}:/${rel.split('/').map(encodeURIComponent).join('/')}` : rel;
 }
 
 function renderStreakPreview() {
@@ -2063,7 +2038,7 @@ async function saveSettings() {
   await dbPut('settings', { key: 'streakWeeks', value: state.streakWeeksDraft });
   await dbPut('settings', { key: 'streakBonus', value: state.streakBonusDraft });
   await dbPut('settings', { key: 'deckSubfolder', value: deckSubfolder(document.getElementById('settings-deck-subfolder').value) });
-  await dbPut('settings', { key: 'deckDrive', value: deckDrive(document.getElementById('settings-deck-drive').value) });
+
   await loadAll();
   showToast('Settings saved.');
   refreshAllTabs();
@@ -2623,17 +2598,6 @@ function titleSlideShapes(winnerCount, when) {
   ];
 }
 
-/**
- * The launcher the service deck links to: this week's title slide, and a
- * click anywhere runs the dated deck from its second slide, so the title is
- * not shown twice. When that deck ends the show returns here; the next → key
- * ends the launcher and lands back in the service deck.
- */
-function buildLauncherPptx(deckFileName, winnerCount, when) {
-  const slide = { xml: [...titleSlideShapes(winnerCount, when), pptLinkOverlay('rId7', 2)], link: deckFileName };
-  return zipStore(pptxParts([slide], []));
-}
-
 async function buildAwardPptx() {
   const saved = savedWeek();
   const winners = saved.winnerIds.map(id => kidById(id));
@@ -2718,37 +2682,6 @@ async function buildAwardPptx() {
   ], audio: 'fanfare', confetti: true });
 
   return zipStore(pptxParts(slides, photos));
-}
-
-/**
- * A transparent shape over the whole slide carrying PowerPoint's "other
- * presentation" action, so a click anywhere runs the deck it names and comes
- * back here when that deck ends. Plain hyperlinks do not return.
- */
-function pptLinkOverlay(rId, slideIndex = 1) {
-  const id = ++shapeSeq;
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="link${id}">` +
-    `<a:hlinkClick r:id="${rId}" action="ppaction://hlinkpres?slideindex=${slideIndex}&amp;slidetitle="/></p:cNvPr>` +
-    '<p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
-    `<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${DECK_W}" cy="${DECK_H}"/></a:xfrm>` +
-    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-    '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>' +
-    '<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>';
-}
-
-/**
- * The one-slide bridge that goes at the end of the service deck: the title
- * and a full-slide link to the dated deck beside it. Same canvas and colours
- * as the deck, so it pastes in unscaled.
- */
-function buildLinkSlidePptx(deckFileName) {
-  const slide = { xml: [
-    pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
-    pptText({ x: inEmu(1.2), y: inEmu(4.6), w: DECK_W - inEmu(2.4), h: inEmu(2.05),
-              lines: 'Best Worshiper 시상', size: 96, color: 'E8EAF6', bold: true, font: 'Malgun Gothic' }),
-    pptLinkOverlay('rId7'),
-  ], link: deckFileName };
-  return zipStore(pptxParts([slide], []));
 }
 
 /** Assembles the OOXML package around the generated slides. */
@@ -2839,7 +2772,6 @@ function pptxParts(slides, photos) {
           rel('rId5', 'image', '../media/poster.png')
         : '') +
       (s.confetti ? rel('rId6', 'image', '../media/confetti.gif') : '') +
-      (s.link ? `<Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${xmlEscape(s.link)}" TargetMode="External"/>` : '') +
       '</Relationships>') });
   });
 
@@ -2909,17 +2841,9 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-/**
- * The deck is dated. A link in the service deck cannot find "the newest" file
- * by itself, so each export also rewrites BestWorshiper.pptx: a one-slide
- * launcher — the deck's title slide — whose link opens that week's dated deck
- * from its second slide. The slide pasted into the service deck points at the
- * launcher and so never needs replacing.
- */
+/** One dated deck per week; it is opened on its own at church. */
 const awardStamp = () => state.currentWeekDate.replace(/-/g, '');
 const awardFileName = () => `BestWorshiper_${awardStamp()}.pptx`;
-const LAUNCHER_NAME = 'BestWorshiper.pptx';
-const LINK_SLIDE_NAME = '시상링크.pptx';
 
 async function exportAwardPptx() {
   const saved = savedWeek();
@@ -2936,12 +2860,7 @@ async function exportAwardPptx() {
     // deck's link goes by name, so a fresh link slide goes out with every deck,
     // to be pasted in as the service deck's last slide.
     const sub = deckSubfolder();
-    const files = [
-      { fileName: awardFileName(), bytes },
-      // The launcher sits beside the deck, so it links by bare file name.
-      { fileName: LAUNCHER_NAME, bytes: buildLauncherPptx(awardFileName(), saved.winnerIds.length, state.currentWeekDate) },
-      { fileName: LINK_SLIDE_NAME, bytes: buildLinkSlidePptx(deckLinkTarget(LAUNCHER_NAME)) },
-    ];
+    const files = [{ fileName: awardFileName(), bytes }];
 
     if (!IS_ANDROID_APP) {
       files.forEach(f => saveBinaryToDevice(f.fileName, f.bytes, PPTX_MIME));
