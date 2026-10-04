@@ -619,7 +619,7 @@ select:focus { outline: none; border-color: var(--accent); }
   <div class="modal-box" style="width:360px">
     <div class="modal-title"><span>Save the deck to…</span><button class="modal-close" id="export-modal-close">✕</button></div>
     <div style="display:grid;gap:8px;margin-top:14px">
-      <button id="export-phone-btn" class="btn accent" style="text-align:left">📱 This phone<br><small style="font-weight:400;opacity:.8">Download / bestWorshiper / BestWorshiper.pptx</small></button>
+      <button id="export-phone-btn" class="btn accent" style="text-align:left">📱 This phone<br><small style="font-weight:400;opacity:.8">Download / bestWorshiper / EM</small></button>
       <button id="export-usb-btn" class="btn" style="text-align:left">🔌 USB drive<br><small style="font-weight:400;opacity:.8">Plug the drive in first; confirm the folder once</small></button>
       <button id="export-dest-btn" class="btn hidden" style="text-align:left">📁 <span id="export-dest-name"></span><br><small style="font-weight:400;opacity:.8">The folder set in Settings</small></button>
       <button id="export-share-btn" class="btn" style="text-align:left">↗ Share…<br><small style="font-weight:400;opacity:.8">OneDrive, KakaoTalk, mail and the rest</small></button>
@@ -689,8 +689,9 @@ select:focus { outline: none; border-color: var(--accent); }
       <div class="card">
         <h3>📂 Deck folder</h3>
         <p class="hint">Where the deck lives on the USB stick, and the drive letter the stick gets on the
-        church PC. The link slide points at <code>M:\EM\BestWorshiper_….pptx</code>, so the service
-        deck can be anywhere on that PC. Phone and USB exports save under the subfolder.<br>
+        church PC. Every export writes the dated deck plus <code>BestWorshiper.pptx</code>, the latest
+        copy, and the link slide (<code>시상링크.pptx</code>) points at <code>M:\EM\BestWorshiper.pptx</code> —
+        paste that slide into the service deck once and it keeps opening the newest week.<br>
         Leave the drive letter empty to link relative to the service deck instead.</p>
         <div class="setting-row">
           <div class="setting-key">Drive letter</div>
@@ -760,7 +761,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.5.3';
+const APP_VERSION = '2.6.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1919,10 +1920,10 @@ async function quickPoint(kidId, delta, date, reason) {
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════
 // ── Where the exported deck goes (Android only) ──
-let pendingExport = null;   // {files: [{fileName, b64}, ...]} while the chooser is open
+let pendingExport = null;   // {sub, files: [{fileName, b64}, ...]} while the chooser is open
 
-function openExportChooser(deckName, deckB64, linkName, linkB64, sub) {
-  pendingExport = { sub, files: [{ fileName: deckName, b64: deckB64 }, { fileName: linkName, b64: linkB64 }] };
+function openExportChooser(files, sub) {
+  pendingExport = { sub, files };
   const dest = document.getElementById('export-dest-btn');
   let name = '';
   try { name = window.AndroidBridge.destinationName() || ''; } catch (e) {}
@@ -1948,6 +1949,7 @@ function exportFilesWith(call, where) {
   const next = () => {
     const f = files.shift();
     if (!f) { showToast(`Saved to ${where}: ${pendingExport.files.map(x => x.fileName).join(', ')}`); return; }
+    // The bridge reports "saved:<name> (<size>)" so a short write shows up here.
     let result = '';
     try { result = String(call(f.fileName, f.b64)); } catch (e) { result = 'error:' + e.message; }
     if (result === 'picking') { window.onExportResult = r => { window.onExportResult = null; settle(String(r), f); }; return; }
@@ -2886,10 +2888,15 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-/** The deck and the one-slide link that opens it, both dated so weeks never collide. */
+/**
+ * Each export writes the dated deck for the record and a copy under one fixed
+ * name, which is what the link slide points at — so the slide pasted into the
+ * service deck keeps opening the latest week without being replaced.
+ */
 const awardStamp = () => state.currentWeekDate.replace(/-/g, '');
 const awardFileName = () => `BestWorshiper_${awardStamp()}.pptx`;
-const linkFileName = () => `시상링크_${awardStamp()}.pptx`;
+const LATEST_DECK_NAME = 'BestWorshiper.pptx';
+const LINK_SLIDE_NAME = '시상링크.pptx';
 
 async function exportAwardPptx() {
   const saved = savedWeek();
@@ -2905,19 +2912,21 @@ async function exportAwardPptx() {
     // The deck is dated, and so is the link slide that opens it: the service
     // deck's link goes by name, so a fresh link slide goes out with every deck,
     // to be pasted in as the service deck's last slide.
-    const fileName = awardFileName();
     const sub = deckSubfolder();
-    const link = { fileName: linkFileName(), bytes: buildLinkSlidePptx(deckLinkTarget(fileName)) };
+    const files = [
+      { fileName: awardFileName(), bytes },
+      { fileName: LATEST_DECK_NAME, bytes },
+      { fileName: LINK_SLIDE_NAME, bytes: buildLinkSlidePptx(deckLinkTarget(LATEST_DECK_NAME)) },
+    ];
 
     if (!IS_ANDROID_APP) {
-      saveBinaryToDevice(fileName, bytes, PPTX_MIME);
-      saveBinaryToDevice(link.fileName, link.bytes, PPTX_MIME);
+      files.forEach(f => saveBinaryToDevice(f.fileName, f.bytes, PPTX_MIME));
       return;
     }
 
     // On the phone the deck can go several places; ask each time, since the
     // USB drive is only plugged in on the way to church.
-    openExportChooser(fileName, base64FromBytes(bytes), link.fileName, base64FromBytes(link.bytes), sub);
+    openExportChooser(files.map(f => ({ fileName: f.fileName, b64: base64FromBytes(f.bytes) })), sub);
   } catch (e) {
     console.error(e);
     showToast('PPT export failed: ' + e.message);

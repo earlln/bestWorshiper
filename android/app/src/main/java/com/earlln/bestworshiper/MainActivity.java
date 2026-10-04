@@ -243,9 +243,21 @@ public class MainActivity extends AppCompatActivity {
         try (OutputStream out = getContentResolver().openOutputStream(file.getUri(), "wt")) {
             if (out == null) throw new IllegalStateException("stream failed");
             out.write(bytes);
+            out.flush();
+        }
+        // A deck that opens with no slides is usually a short write; check the
+        // size on disk and say so rather than report a success.
+        long onDisk = file.length();
+        if (onDisk > 0 && onDisk != bytes.length) {
+            throw new IllegalStateException("wrote " + onDisk + " of " + bytes.length + " bytes");
         }
         String name = file.getName();
-        return name != null ? name : fileName;
+        return (name != null ? name : fileName) + " (" + sizeLabel(bytes.length) + ")";
+    }
+
+    private static String sizeLabel(long bytes) {
+        return bytes >= 1_000_000 ? String.format(java.util.Locale.US, "%.1f MB", bytes / 1_000_000.0)
+             : bytes >= 1_000 ? (bytes / 1_000) + " KB" : bytes + " B";
     }
 
     /** The mounted, removable volume — the USB drive — or null. */
@@ -464,13 +476,14 @@ public class MainActivity extends AppCompatActivity {
                     values.put(MediaStore.MediaColumns.IS_PENDING, 0);
                     getContentResolver().update(item, values, null, null);
 
-                    String name = fileName;
+                    String name = fileName; long size = -1;
                     try (android.database.Cursor c = getContentResolver().query(item,
-                            new String[]{MediaStore.MediaColumns.DISPLAY_NAME}, null, null, null)) {
-                        if (c != null && c.moveToFirst()) name = c.getString(0);
+                            new String[]{MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE}, null, null, null)) {
+                        if (c != null && c.moveToFirst()) { name = c.getString(0); size = c.getLong(1); }
                     }
-                    toast("Saved to " + where + name);
-                    return fileName.equals(name) ? "" : "renamed:" + name;
+                    if (size > 0 && size != bytes.length) return "short-write:" + size + "/" + bytes.length;
+                    toast("Saved to " + where + name + " (" + sizeLabel(bytes.length) + ")");
+                    return fileName.equals(name) ? "saved:" + name + " (" + sizeLabel(bytes.length) + ")" : "renamed:" + name;
                 } else {
                     File dir = new File(Environment.getExternalStoragePublicDirectory(
                             Environment.DIRECTORY_DOWNLOADS), PHONE_DIR + (sub.isEmpty() ? "" : "/" + sub));
