@@ -161,6 +161,8 @@ input:focus { outline: none; border-color: var(--accent); }
 }
 .kid-check-row .kreason { font-size: 10px; color: var(--text-dim); line-height: 1.4; }
 .kid-check-row .kscore { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.kid-check-row .kpts { display: flex; gap: 4px; flex-shrink: 0; }
+.row-pts { display: flex; gap: 4px; margin-top: 4px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -478,7 +480,7 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
     </div>
     <div class="card">
-      <div class="hint" style="margin-bottom:10px">Pick the children nominated this week and press <b>Save nominees</b>. Saved nominees appear on the <b>This Week</b> screen.<br>The score on the right is <b>penalty + streak bonus</b>; points given with ± are added on the This Week screen.</div>
+      <div class="hint" style="margin-bottom:10px">Pick the children nominated this week and press <b>Save nominees</b>. Saved nominees appear on the <b>This Week</b> screen.<br>The score on the right is <b>penalty + streak bonus</b>. Once the nominees are saved, give extra points with <b>±</b> right here or on the This Week screen.</div>
       <div id="cand-rule-summary"></div>
       <div class="row-actions" style="margin-bottom:8px">
         <select id="candidate-sort-mode">
@@ -758,7 +760,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.5.2';
+const APP_VERSION = '2.5.3';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1199,13 +1201,15 @@ function renderCandidatePicker() {
   list.innerHTML = kids.map(k => {
     const checked = state.candidateIds.has(k.id) ? 'checked' : '';
     const s = computeScore(k.id, state.currentWeekDate, basis);
-    // Only the automatic parts belong here — hand-given points come from the
-    // selection screen, which hasn't happened when a roster is put together.
-    // The figure shown excludes them too, so it always matches its reasons.
+    // Hand-given points belong to a saved roster, so they appear — and can be
+    // given — only once the kid is on it. Before that the figure is the
+    // automatic parts alone, so it always matches its reasons.
+    const onRoster = !!basis && basis.includes(k.id);
     const notes = [];
     if (s.penalty !== 0) notes.push(`penalty ${fmtNum(s.penalty)} (won ${mmdd(s.penaltyFrom)}, ${s.penaltyWeeksAgo}w ago)`);
     if (s.bonus !== 0) notes.push(`bonus +${fmtNum(s.bonus)} (${s.streak} weeks in a row)`);
-    const autoScore = round1(s.penalty + s.bonus);
+    if (onRoster && s.manual !== 0) notes.push(`by hand ${fmtScore(s.manual)}`);
+    const autoScore = onRoster ? s.total : round1(s.penalty + s.bonus);
 
     return `
       <label class="kid-check-row">
@@ -1216,6 +1220,10 @@ function renderCandidatePicker() {
           <span class="kreason">${notes.length ? notes.join(' · ') : 'no penalty or bonus'}</span>
         </span>
         <span class="kscore">${fmtScore(autoScore)}</span>
+        ${onRoster ? `<span class="kpts">
+          <button type="button" class="mini-btn" data-action="quickPoint" data-id="${k.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review +">+</button>
+          <button type="button" class="mini-btn" data-action="quickPoint" data-id="${k.id}" data-delta="-1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review −">−</button>
+        </span>` : ''}
       </label>`;
   }).join('');
 
@@ -1290,12 +1298,20 @@ function renderCandidateScoreTable() {
     ${renderRuleSummary()}
     <div class="table-scroll">
     <table>
-      <thead><tr><th></th><th>Name</th><th>Points</th><th>Penalty</th><th>Streak</th><th>Total</th><th>±</th><th>Win</th></tr></thead>
+      <thead><tr><th>Win</th><th></th><th>Name</th><th>Points</th><th>Penalty</th><th>Streak</th><th>Total</th></tr></thead>
       <tbody>
         ${scored.map(({ kid, score }) => `
           <tr class="${state.winnerIds.has(kid.id) ? 'winner-row' : ''}">
+            <td><input type="checkbox" data-action="toggleWinner" data-id="${kid.id}" ${state.winnerIds.has(kid.id) ? 'checked' : ''}></td>
             <td>${mediaThumbHTMLSmall(kid)}</td>
-            <td>${escapeHtml(kid.name)}</td>
+            <td>
+              ${escapeHtml(kid.name)}
+              <!-- The controls sit by the name so a phone shows them without scrolling sideways. -->
+              <div class="row-pts">
+                <button type="button" class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review +">+</button>
+                <button type="button" class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review −">−</button>
+              </div>
+            </td>
             <td>${fmtScore(score.manual)}</td>
             <td>
               ${fmtScore(score.penalty)}
@@ -1310,11 +1326,6 @@ function renderCandidateScoreTable() {
                 : '<div class="cell-note">no streak</div>'}
             </td>
             <td>${fmtScore(score.total)}</td>
-            <td>
-              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review +">+</button>
-              <button class="mini-btn" data-action="quickPoint" data-id="${kid.id}" data-delta="-1" data-date="${state.currentWeekDate}" data-reason="${state.currentWeekDate} review −">−</button>
-            </td>
-            <td><input type="checkbox" data-action="toggleWinner" data-id="${kid.id}" ${state.winnerIds.has(kid.id) ? 'checked' : ''}></td>
           </tr>`).join('')}
       </tbody>
     </table>
