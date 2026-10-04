@@ -219,7 +219,6 @@ table input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
 }
 .step-btn:hover { background: rgba(255,255,255,0.18); }
 .step-val { min-width: 26px; text-align: center; font-size: 14px; font-weight: 700; }
-.streak-tag { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 
 /* Announcement script, read aloud during the ceremony */
 .script-panel {
@@ -480,7 +479,7 @@ select:focus { outline: none; border-color: var(--accent); }
       </div>
     </div>
     <div class="card">
-      <div class="hint" style="margin-bottom:10px">Pick the children nominated this week and press <b>Save nominees</b>. Saved nominees appear on the <b>This Week</b> screen.<br>The score on the right is <b>penalty + streak bonus</b>. Once the nominees are saved, give extra points with <b>±</b> right here or on the This Week screen.</div>
+      <div class="hint" style="margin-bottom:10px">Pick the children nominated this week and press <b>Save nominees</b>. Saved nominees appear on the <b>This Week</b> screen.<br>The score on the right is <b>penalty + attendance bonus</b>. Once the nominees are saved, give extra points with <b>±</b> right here or on the This Week screen.</div>
       <div id="cand-rule-summary"></div>
       <div class="row-actions" style="margin-bottom:8px">
         <select id="candidate-sort-mode">
@@ -658,25 +657,25 @@ select:focus { outline: none; border-color: var(--accent); }
         </div>
       </div>
       <div class="card">
-        <h3>Streak bonus</h3>
-        <p class="hint">Rewards a child nominated week after week. The first week is the baseline, so the bonus starts at <b>two weeks in a row</b> and grows with the streak.</p>
+        <h3>Attendance bonus</h3>
+        <p class="hint">Rewards a child who keeps being nominated. Every week on the roster within the <b>recent weeks</b> window earns the bonus, and a missed week only costs that week — it never resets the count.</p>
         <div class="setting-row">
-          <div class="setting-key">Max weeks counted</div>
+          <div class="setting-key">Recent weeks</div>
           <div class="stepper">
-            <button class="step-btn" data-action="streakWeeksStep" data-delta="-1">−</button>
-            <span class="step-val" id="settings-streak-weeks-display">4</span>
-            <button class="step-btn" data-action="streakWeeksStep" data-delta="1">+</button>
+            <button class="step-btn" data-action="recentWeeksStep" data-delta="-1">−</button>
+            <span class="step-val" id="settings-recent-weeks-display">5</span>
+            <button class="step-btn" data-action="recentWeeksStep" data-delta="1">+</button>
           </div>
         </div>
         <div class="setting-row">
           <div class="setting-key">Points per week</div>
           <div class="stepper">
-            <button class="step-btn" data-action="streakBonusStep" data-delta="-1">−</button>
-            <span class="step-val" id="settings-streak-bonus-display">1</span>
-            <button class="step-btn" data-action="streakBonusStep" data-delta="1">+</button>
+            <button class="step-btn" data-action="nominationBonusStep" data-delta="-1">−</button>
+            <span class="step-val" id="settings-nomination-bonus-display">1</span>
+            <button class="step-btn" data-action="nominationBonusStep" data-delta="1">+</button>
           </div>
         </div>
-        <p class="hint" id="streak-preview"></p>
+        <p class="hint" id="attendance-preview"></p>
       </div>
       <div class="card">
         <button id="settings-save-btn" class="btn accent" style="width:100%">Save settings</button>
@@ -754,7 +753,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.8.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -833,8 +832,8 @@ const DEFAULT_SCRIPT = [
 
 const DEFAULT_SETTINGS = {
   decayWeeks: 5,   // recent winners are penalised for this many weeks
-  streakWeeks: 4,  // consecutive candidate weeks that still earn a bonus
-  streakBonus: 1,  // points per consecutive week beyond the first
+  recentWeeks: 5,      // the window of recorded weeks the attendance bonus looks at
+  nominationBonus: 1,  // points for each week nominated inside that window
   ceremonyScript: DEFAULT_SCRIPT,
   deckSubfolder: 'EM',   // folder on the stick or phone the deck is saved into
 };
@@ -897,48 +896,52 @@ function recencyPenalty(kidId, asOfDate) {
 }
 
 /**
- * Weeks in a row, ending at asOfDate, that this kid registered as a candidate.
+ * How many of the most recent recorded weeks (ending at asOfDate) had this kid
+ * on the nominee roster.
  *
- * Counted over weeks that actually have a record rather than calendar weeks, so
- * a skipped service (no record at all) does not break anyone's streak.
+ * The window is counted over weeks that actually have a record rather than
+ * calendar weeks, so a cancelled service never shrinks it. A week the kid was
+ * left off simply does not count — it does not reset anything, which is the
+ * point: steady attendance keeps paying even after one missed Sunday.
  * `liveCandidateIds` lets the week being edited count before it is saved.
+ *
+ * Returns { count, of } where `of` is how many weeks the window really held,
+ * so the screens can say "3 of 5" honestly when there are only 5 weeks on record.
  */
-function candidateStreak(kidId, asOfDate, liveCandidateIds) {
+function recentNominations(kidId, asOfDate, liveCandidateIds) {
+  const span = state.settings.recentWeeks || 0;
+  if (span < 1) return { count: 0, of: 0 };
+
   const recorded = state.weeks
     .filter(w => w.date <= asOfDate)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  const sequence = [];
+  const rosters = [];
   if (liveCandidateIds) {
-    sequence.push([...liveCandidateIds]);
+    rosters.push([...liveCandidateIds]);
     for (const w of recorded) {
-      if (w.date !== asOfDate) sequence.push(w.candidateIds);
+      if (w.date !== asOfDate) rosters.push(w.candidateIds);
     }
   } else {
-    for (const w of recorded) sequence.push(w.candidateIds);
+    for (const w of recorded) rosters.push(w.candidateIds);
   }
 
-  const cap = state.settings.streakWeeks || 0;
-  let streak = 0;
-  for (const ids of sequence) {
-    if (!ids.includes(kidId)) break;
-    streak++;
-    if (streak >= cap) break;
-  }
-  return streak;
+  const window = rosters.slice(0, span);
+  const count = window.filter(ids => ids.includes(kidId)).length;
+  return { count, of: window.length };
 }
 
 /**
- * Reward for showing up as a candidate week after week. The first week is the
- * baseline — every candidate has it — so the bonus starts from the second
- * consecutive week and grows with the streak, up to the configured cap.
+ * Reward for keeping on being nominated: every week on the roster inside the
+ * recent window earns the per-week points, so a kid nominated 4 of the last
+ * 5 weeks gets four times the bonus whether or not those weeks were adjacent.
  */
-function streakBonus(kidId, asOfDate, liveCandidateIds) {
-  const cap = state.settings.streakWeeks || 0;
-  const per = state.settings.streakBonus || 0;
-  if (cap < 2 || per === 0) return { streak: 0, bonus: 0 };
-  const streak = candidateStreak(kidId, asOfDate, liveCandidateIds);
-  return { streak, bonus: Math.max(0, streak - 1) * per };
+function attendanceBonus(kidId, asOfDate, liveCandidateIds) {
+  const span = state.settings.recentWeeks || 0;
+  const per = state.settings.nominationBonus || 0;
+  if (span < 1 || per === 0) return { recent: 0, recentOf: 0, bonus: 0 };
+  const { count, of } = recentNominations(kidId, asOfDate, liveCandidateIds);
+  return { recent: count, recentOf: of, bonus: count * per };
 }
 
 /** Bonuses can be fractional, so keep totals free of binary-float noise. */
@@ -947,7 +950,7 @@ function round1(n) { return Math.round(n * 10) / 10; }
 /**
  * Points given by hand count only for the week they were awarded in. Carrying
  * them forever would let a kid scored early outrank everyone permanently, while
- * the penalty and streak only ever look at recent weeks.
+ * the penalty and attendance bonus only ever look at recent weeks.
  */
 function manualTotal(kidId, asOfDate) {
   return state.points
@@ -958,14 +961,15 @@ function manualTotal(kidId, asOfDate) {
 function computeScore(kidId, asOfDate, liveCandidateIds) {
   const manual = manualTotal(kidId, asOfDate);
   const pen = recencyPenalty(kidId, asOfDate);
-  const { streak, bonus } = streakBonus(kidId, asOfDate, liveCandidateIds);
+  const { recent, recentOf, bonus } = attendanceBonus(kidId, asOfDate, liveCandidateIds);
   return {
     manual: round1(manual),
     penalty: round1(pen.penalty),
     penaltyFrom: pen.fromDate,
     penaltyWeeksAgo: pen.weeksAgo,
     bonus: round1(bonus),
-    streak,
+    recent,
+    recentOf,
     total: round1(manual + pen.penalty + bonus),
   };
 }
@@ -1200,7 +1204,7 @@ function renderCandidatePicker() {
     const onRoster = !!basis && basis.includes(k.id);
     const notes = [];
     if (s.penalty !== 0) notes.push(`penalty ${fmtNum(s.penalty)} (won ${mmdd(s.penaltyFrom)}, ${s.penaltyWeeksAgo}w ago)`);
-    if (s.bonus !== 0) notes.push(`bonus +${fmtNum(s.bonus)} (${s.streak} weeks in a row)`);
+    if (s.bonus !== 0) notes.push(`bonus +${fmtNum(s.bonus)} (nominated ${s.recent} of last ${s.recentOf} weeks)`);
     if (onRoster && s.manual !== 0) notes.push(`by hand ${fmtScore(s.manual)}`);
     const autoScore = onRoster ? s.total : round1(s.penalty + s.bonus);
 
@@ -1291,7 +1295,7 @@ function renderCandidateScoreTable() {
     ${renderRuleSummary()}
     <div class="table-scroll">
     <table>
-      <thead><tr><th>Win</th><th></th><th>Name</th><th>Points</th><th>Penalty</th><th>Streak</th><th>Total</th></tr></thead>
+      <thead><tr><th>Win</th><th></th><th>Name</th><th>Points</th><th>Penalty</th><th>Attend</th><th>Total</th></tr></thead>
       <tbody>
         ${scored.map(({ kid, score }) => `
           <tr class="${state.winnerIds.has(kid.id) ? 'winner-row' : ''}">
@@ -1314,9 +1318,9 @@ function renderCandidateScoreTable() {
             </td>
             <td>
               ${fmtScore(score.bonus)}
-              ${score.streak > 1
-                ? `<div class="cell-note">${score.streak} weeks<br>in a row</div>`
-                : '<div class="cell-note">no streak</div>'}
+              ${score.recentOf > 0
+                ? `<div class="cell-note">${score.recent} of last<br>${score.recentOf} weeks</div>`
+                : '<div class="cell-note">no weeks yet</div>'}
             </td>
             <td>${fmtScore(score.total)}</td>
           </tr>`).join('')}
@@ -1328,14 +1332,14 @@ function renderCandidateScoreTable() {
 /** Spells out the rules currently in force, so the columns need no explanation. */
 function renderRuleSummary() {
   const N = state.settings.decayWeeks || 5;
-  const cap = state.settings.streakWeeks || 0;
-  const per = state.settings.streakBonus || 0;
+  const span = state.settings.recentWeeks || 0;
+  const per = state.settings.nominationBonus || 0;
 
   const decay = [];
   for (let w = 1; w <= N; w++) decay.push(`${w}w ago −${N - w + 1}`);
 
-  const streak = (cap >= 2 && per > 0)
-    ? `2 weeks +${fmtNum(per)} → ${cap} weeks +${fmtNum((cap - 1) * per)} (capped at ${cap})`
+  const attend = (span >= 1 && per > 0)
+    ? `+${fmtNum(per)} for each of the last ${span} weeks nominated (${span} of ${span} → +${fmtNum(span * per)})`
     : 'off';
 
   return `
@@ -1343,8 +1347,8 @@ function renderRuleSummary() {
       <summary data-action="toggleRuleSummary">Scoring rules (as of ${state.currentWeekDate})</summary>
       <div><b>Penalty</b> — for a recent winner: ${decay.join(' · ')} · nothing after ${N + 1} weeks<br>
       Won more than once? Only the <b>most recent</b> counts.</div>
-      <div style="margin-top:6px"><b>Streak</b> — ${streak}<br>
-      Counted over weeks on record, so a cancelled service doesn't break it.</div>
+      <div style="margin-top:6px"><b>Attendance</b> — ${attend}<br>
+      Counted over weeks on record. A missed week just doesn't count; it never resets the bonus.</div>
       <div style="margin-top:6px"><b>Points</b> — given with ±, counting for this week only.</div>
     </details>`;
 }
@@ -1983,12 +1987,12 @@ function renderSettingsTab() {
   document.getElementById('settings-deck-subfolder').value = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder;
 
   state.decayDraft = state.settings.decayWeeks ?? DEFAULT_SETTINGS.decayWeeks;
-  state.streakWeeksDraft = state.settings.streakWeeks ?? DEFAULT_SETTINGS.streakWeeks;
-  state.streakBonusDraft = state.settings.streakBonus ?? DEFAULT_SETTINGS.streakBonus;
+  state.recentWeeksDraft = state.settings.recentWeeks ?? DEFAULT_SETTINGS.recentWeeks;
+  state.nominationBonusDraft = state.settings.nominationBonus ?? DEFAULT_SETTINGS.nominationBonus;
   document.getElementById('settings-decay-weeks-display').textContent = state.decayDraft;
-  document.getElementById('settings-streak-weeks-display').textContent = state.streakWeeksDraft;
-  document.getElementById('settings-streak-bonus-display').textContent = fmtNum(state.streakBonusDraft);
-  renderStreakPreview();
+  document.getElementById('settings-recent-weeks-display').textContent = state.recentWeeksDraft;
+  document.getElementById('settings-nomination-bonus-display').textContent = fmtNum(state.nominationBonusDraft);
+  renderAttendancePreview();
 }
 
 /** The deck's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
@@ -1996,17 +2000,17 @@ function deckSubfolder(raw = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.de
   return String(raw || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
 }
 
-function renderStreakPreview() {
-  const cap = state.streakWeeksDraft;
-  const per = state.streakBonusDraft;
-  const el = document.getElementById('streak-preview');
-  if (cap < 2 || per === 0) {
-    el.textContent = 'No streak bonus with the current settings.';
+function renderAttendancePreview() {
+  const span = state.recentWeeksDraft;
+  const per = state.nominationBonusDraft;
+  const el = document.getElementById('attendance-preview');
+  if (span < 1 || per === 0) {
+    el.textContent = 'No attendance bonus with the current settings.';
     return;
   }
   const parts = [];
-  for (let w = 2; w <= cap; w++) parts.push(`${w} weeks +${fmtNum((w - 1) * per)}`);
-  el.textContent = `Now: ${parts.join(' · ')} (${cap}+ weeks stays at +${fmtNum((cap - 1) * per)})`;
+  for (let w = 1; w <= span; w++) parts.push(`${w} of ${span} +${fmtNum(w * per)}`);
+  el.textContent = `Now: ${parts.join(' · ')}`;
 }
 
 function stepDecayWeeks(delta) {
@@ -2014,10 +2018,10 @@ function stepDecayWeeks(delta) {
   document.getElementById('settings-decay-weeks-display').textContent = state.decayDraft;
 }
 
-function stepStreakWeeks(delta) {
-  state.streakWeeksDraft = Math.min(20, Math.max(0, state.streakWeeksDraft + delta));
-  document.getElementById('settings-streak-weeks-display').textContent = state.streakWeeksDraft;
-  renderStreakPreview();
+function stepRecentWeeks(delta) {
+  state.recentWeeksDraft = Math.min(20, Math.max(0, state.recentWeeksDraft + delta));
+  document.getElementById('settings-recent-weeks-display').textContent = state.recentWeeksDraft;
+  renderAttendancePreview();
 }
 
 function fmtNum(n) {
@@ -2025,18 +2029,18 @@ function fmtNum(n) {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
-function stepStreakBonus(delta) {
-  // Half-point steps, so a streak can nudge the ranking without overpowering
+function stepNominationBonus(delta) {
+  // Half-point steps, so attendance can nudge the ranking without overpowering
   // the whole-number penalties.
-  state.streakBonusDraft = round1(Math.min(20, Math.max(0, state.streakBonusDraft + delta * 0.5)));
-  document.getElementById('settings-streak-bonus-display').textContent = fmtNum(state.streakBonusDraft);
-  renderStreakPreview();
+  state.nominationBonusDraft = round1(Math.min(20, Math.max(0, state.nominationBonusDraft + delta * 0.5)));
+  document.getElementById('settings-nomination-bonus-display').textContent = fmtNum(state.nominationBonusDraft);
+  renderAttendancePreview();
 }
 
 async function saveSettings() {
   await dbPut('settings', { key: 'decayWeeks', value: state.decayDraft });
-  await dbPut('settings', { key: 'streakWeeks', value: state.streakWeeksDraft });
-  await dbPut('settings', { key: 'streakBonus', value: state.streakBonusDraft });
+  await dbPut('settings', { key: 'recentWeeks', value: state.recentWeeksDraft });
+  await dbPut('settings', { key: 'nominationBonus', value: state.nominationBonusDraft });
   await dbPut('settings', { key: 'deckSubfolder', value: deckSubfolder(document.getElementById('settings-deck-subfolder').value) });
 
   await loadAll();
@@ -3310,8 +3314,8 @@ document.addEventListener('click', e => {
     case 'selectAllCandidates': selectAllCandidates(t.dataset.select === '1'); break;
     case 'winnerCountStep': stepWinnerCount(Number(t.dataset.delta)); break;
     case 'decayWeeksStep': stepDecayWeeks(Number(t.dataset.delta)); break;
-    case 'streakWeeksStep': stepStreakWeeks(Number(t.dataset.delta)); break;
-    case 'streakBonusStep': stepStreakBonus(Number(t.dataset.delta)); break;
+    case 'recentWeeksStep': stepRecentWeeks(Number(t.dataset.delta)); break;
+    case 'nominationBonusStep': stepNominationBonus(Number(t.dataset.delta)); break;
     // Remember whether the rules block was left open across re-renders.
     case 'toggleRuleSummary': state.ruleSummaryOpen = !state.ruleSummaryOpen; break;
   }
