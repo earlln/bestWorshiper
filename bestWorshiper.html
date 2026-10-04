@@ -753,7 +753,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.8.1';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2838,9 +2838,16 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
   a.download = fileName;
   document.body.appendChild(a);
   a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('PPT saved.');
+  // With "ask where to save each file" on, the browser reads the blob only
+  // after the save dialog closes. Revoking it here, as before, left a 0-byte
+  // .pptx on the PC — which PowerPoint opens as an empty deck. Keep the blob
+  // alive long enough for that dialog.
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 120000);
+  showToast(`PPT saved: ${fileName} (${sizeLabel(bytes.length)})`);
+}
+
+function sizeLabel(n) {
+  return n >= 1000000 ? (n / 1000000).toFixed(1) + ' MB' : n >= 1000 ? Math.round(n / 1000) + ' KB' : n + ' B';
 }
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';

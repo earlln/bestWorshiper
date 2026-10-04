@@ -8,6 +8,8 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.media.MediaScannerConnection;
+import android.os.ParcelFileDescriptor;
 import android.os.Environment;
 import android.os.storage.StorageManager;
 import android.os.storage.StorageVolume;
@@ -108,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_USB, tree.toString()).apply();
             try {
                 String saved = writeIntoTree(tree, sub, name, mime, bytes);
-                toast("Saved to USB: " + saved);
+                toast("Saved to USB: " + saved + " — eject the drive before unplugging it");
                 notifyExport(jsonString("saved:" + saved));
             } catch (Exception e) {
                 notifyExport(jsonString("error:" + e.getMessage()));
@@ -248,8 +250,10 @@ public class MainActivity extends AppCompatActivity {
         try {
             writeTruncating(file.getUri(), bytes);
             // A deck that opens with no slides is a short write; check the size
-            // on disk rather than report a success.
-            long onDisk = file.length();
+            // on disk rather than report a success. Read it back through the
+            // descriptor: DocumentFile.length() can be a stale cached value.
+            long onDisk = sizeOnDisk(file.getUri());
+            if (onDisk < 0) onDisk = file.length();
             if (onDisk != bytes.length) {
                 throw new IllegalStateException("wrote " + onDisk + " of " + bytes.length + " bytes");
             }
@@ -270,16 +274,30 @@ public class MainActivity extends AppCompatActivity {
     private void writeTruncating(Uri uri, byte[] bytes) throws Exception {
         Exception last = null;
         for (String mode : new String[]{"wt", "rwt", "w"}) {
-            try (OutputStream out = getContentResolver().openOutputStream(uri, mode)) {
-                if (out == null) throw new IllegalStateException("no stream (" + mode + ")");
-                out.write(bytes);
-                out.flush();
+            try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, mode)) {
+                if (pfd == null) throw new IllegalStateException("no descriptor (" + mode + ")");
+                try (FileOutputStream out = new FileOutputStream(pfd.getFileDescriptor())) {
+                    out.write(bytes);
+                    out.flush();
+                    // A USB stick pulled out before the kernel flushes its cache
+                    // keeps a 0-byte directory entry; force the data down first.
+                    try { pfd.getFileDescriptor().sync(); } catch (Exception ignored) { /* provider without fsync */ }
+                }
                 return;
             } catch (Exception e) {
                 last = e;
             }
         }
         throw new IllegalStateException("write failed: " + (last != null ? last.getMessage() : "?"));
+    }
+
+    /** The size the file really has now, read back through the provider; -1 if unreadable. */
+    private long sizeOnDisk(Uri uri) {
+        try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r")) {
+            return pfd == null ? -1 : pfd.getStatSize();
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     private static String sizeLabel(long bytes) {
@@ -506,12 +524,22 @@ public class MainActivity extends AppCompatActivity {
                         return "error:" + e.getMessage();
                     }
 
-                    String name = fileName; long size = -1;
+                    String name = fileName; long size = -1; String path = null;
                     try (android.database.Cursor c = getContentResolver().query(item,
-                            new String[]{MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE}, null, null, null)) {
-                        if (c != null && c.moveToFirst()) { name = c.getString(0); size = c.getLong(1); }
+                            new String[]{MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DATA}, null, null, null)) {
+                        if (c != null && c.moveToFirst()) { name = c.getString(0); size = c.getLong(1); path = c.getString(2); }
                     }
-                    if (size > 0 && size != bytes.length) return "short-write:" + size + "/" + bytes.length;
+                    long onDisk = sizeOnDisk(item);
+                    if (onDisk >= 0 && onDisk != bytes.length) {
+                        getContentResolver().delete(item, null, null);
+                        return "short-write:" + onDisk + "/" + bytes.length;
+                    }
+                    if (size != bytes.length && path != null) {
+                        // The file is whole but the media index still says otherwise —
+                        // and a PC over the USB cable copies the size from that index,
+                        // which is how a good deck arrives as 0 bytes. Rescan it.
+                        MediaScannerConnection.scanFile(this_(), new String[]{path}, new String[]{mimeType}, null);
+                    }
                     toast("Saved to " + where + name + " (" + sizeLabel(bytes.length) + ")");
                     return fileName.equals(name) ? "saved:" + name + " (" + sizeLabel(bytes.length) + ")" : "renamed:" + name;
                 } else {
@@ -546,7 +574,7 @@ public class MainActivity extends AppCompatActivity {
             if (held != null) {
                 try {
                     String saved = writeIntoTree(Uri.parse(held), subPath, fileName, mimeType, bytes);
-                    toast("Saved to USB: " + saved);
+                    toast("Saved to USB: " + saved + " — eject the drive before unplugging it");
                     return "saved:" + saved;
                 } catch (Exception e) {
                     // The grant may have lapsed or the drive changed — ask for the
