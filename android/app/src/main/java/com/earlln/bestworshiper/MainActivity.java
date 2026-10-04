@@ -237,22 +237,49 @@ public class MainActivity extends AppCompatActivity {
             if (next == null) throw new IllegalStateException("could not create folder " + part);
             dir = next;
         }
+        if (bytes.length == 0) throw new IllegalStateException("nothing to write (0 bytes received)");
         DocumentFile file = dir.findFile(fileName);
-        if (file == null || !file.isFile()) file = dir.createFile(mime, fileName);
-        if (file == null) throw new IllegalStateException("could not create file");
-        try (OutputStream out = getContentResolver().openOutputStream(file.getUri(), "wt")) {
-            if (out == null) throw new IllegalStateException("stream failed");
-            out.write(bytes);
-            out.flush();
+        boolean created = false;
+        if (file == null || !file.isFile()) {
+            file = dir.createFile(mime, fileName);
+            created = true;
         }
-        // A deck that opens with no slides is usually a short write; check the
-        // size on disk and say so rather than report a success.
-        long onDisk = file.length();
-        if (onDisk > 0 && onDisk != bytes.length) {
-            throw new IllegalStateException("wrote " + onDisk + " of " + bytes.length + " bytes");
+        if (file == null) throw new IllegalStateException("could not create file");
+        try {
+            writeTruncating(file.getUri(), bytes);
+            // A deck that opens with no slides is a short write; check the size
+            // on disk rather than report a success.
+            long onDisk = file.length();
+            if (onDisk != bytes.length) {
+                throw new IllegalStateException("wrote " + onDisk + " of " + bytes.length + " bytes");
+            }
+        } catch (Exception e) {
+            // Leave no empty file behind to be mistaken for the deck.
+            if (created || file.length() == 0) file.delete();
+            throw e;
         }
         String name = file.getName();
         return (name != null ? name : fileName) + " (" + sizeLabel(bytes.length) + ")";
+    }
+
+    /**
+     * Writes the whole file, truncating first. "wt" is the mode that truncates;
+     * a provider that rejects it gets "rwt", and failing that plain "w" on a
+     * file that is already empty.
+     */
+    private void writeTruncating(Uri uri, byte[] bytes) throws Exception {
+        Exception last = null;
+        for (String mode : new String[]{"wt", "rwt", "w"}) {
+            try (OutputStream out = getContentResolver().openOutputStream(uri, mode)) {
+                if (out == null) throw new IllegalStateException("no stream (" + mode + ")");
+                out.write(bytes);
+                out.flush();
+                return;
+            } catch (Exception e) {
+                last = e;
+            }
+        }
+        throw new IllegalStateException("write failed: " + (last != null ? last.getMessage() : "?"));
     }
 
     private static String sizeLabel(long bytes) {
@@ -466,15 +493,18 @@ public class MainActivity extends AppCompatActivity {
                     values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
                     values.put(MediaStore.MediaColumns.RELATIVE_PATH, where);
                     values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                    if (bytes.length == 0) return "error:0 bytes received from the page";
                     Uri item = getContentResolver().insert(collection, values);
                     if (item == null) return "insert-failed";
-                    try (OutputStream out = getContentResolver().openOutputStream(item)) {
-                        if (out == null) return "stream-failed";
-                        out.write(bytes);
+                    try {
+                        writeTruncating(item, bytes);
+                        values.clear();
+                        values.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                        getContentResolver().update(item, values, null, null);
+                    } catch (Exception e) {
+                        getContentResolver().delete(item, null, null);   // no empty file left behind
+                        return "error:" + e.getMessage();
                     }
-                    values.clear();
-                    values.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                    getContentResolver().update(item, values, null, null);
 
                     String name = fileName; long size = -1;
                     try (android.database.Cursor c = getContentResolver().query(item,
@@ -511,13 +541,19 @@ public class MainActivity extends AppCompatActivity {
             if (usb == null) return "no-usb";
             byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
 
+            if (bytes.length == 0) return "error:0 bytes received from the page";
             String held = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_USB, null);
             if (held != null) {
                 try {
                     String saved = writeIntoTree(Uri.parse(held), subPath, fileName, mimeType, bytes);
                     toast("Saved to USB: " + saved);
                     return "saved:" + saved;
-                } catch (Exception e) { /* a different drive, or the grant lapsed — ask again */ }
+                } catch (Exception e) {
+                    // The grant may have lapsed or the drive changed — ask for the
+                    // drive again — but say what went wrong, since a failed write
+                    // on the right drive would otherwise go unexplained.
+                    toast("USB write failed (" + e.getMessage() + ") — choose the drive again");
+                }
             }
 
             pendingBytes = bytes; pendingName = fileName; pendingMime = mimeType; pendingSub = subPath;

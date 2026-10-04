@@ -761,7 +761,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.6.1';
+const APP_VERSION = '2.6.2';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1951,6 +1951,11 @@ function exportFilesWith(call, where) {
     if (!f) { showToast(`Saved to ${where}: ${pendingExport.files.map(x => x.fileName).join(', ')}`); return; }
     // The bridge reports "saved:<name> (<size>)" so a short write shows up here.
     let result = '';
+    if (!f.b64 || f.b64.length < 1000) {
+      // The deck is never this small; the page itself has gone wrong.
+      showToast(`Internal error: ${f.fileName} came out empty (${f.b64 ? f.b64.length : 0} chars).`);
+      return;
+    }
     try { result = String(call(f.fileName, f.b64)); } catch (e) { result = 'error:' + e.message; }
     if (result === 'picking') { window.onExportResult = r => { window.onExportResult = null; settle(String(r), f); }; return; }
     settle(result, f);
