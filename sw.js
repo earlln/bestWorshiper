@@ -1,5 +1,5 @@
 // Bump APP_CACHE_VERSION together with APP_VERSION in bestWorshiper.html
-const APP_CACHE_VERSION = '2.8.1';
+const APP_CACHE_VERSION = '2.8.2';
 const CACHE_NAME = 'bestworshiper-v' + APP_CACHE_VERSION;
 
 const ASSETS = [
