@@ -77,19 +77,18 @@ def text_box(slide, x, y, w, h, text, size, color=TEXT, bold=False,
     return box
 
 
-def meet_line(count):
-    return ("Let's meet today's Best Worshiper!" if count == 1
-            else f"Let's meet today's {count} Best Worshipers!")
+def meet_line():
+    return "Let's meet today's ? Best Worshipers!"
 
 
-def slide_title(prs, when, count):
+def slide_title(prs, when):
     slide = blank(prs)
     text_box(slide, 0, Inches(1.8), SLIDE_W, Inches(2.2), '🏆', 150)
     text_box(slide, 0, Inches(4.2), SLIDE_W, Inches(1.8),
              'Best Worshiper', 96, GOLD, True, EN_FONT)
     text_box(slide, 0, Inches(6.2), SLIDE_W, Inches(1.0), when, 40, DIM, font=EN_FONT)
     text_box(slide, 0, Inches(7.6), SLIDE_W, Inches(1.2),
-             meet_line(count), 40, TEXT)
+             meet_line(), 40, TEXT)
     return slide
 
 
@@ -208,7 +207,7 @@ def load_from_backup(path, week_date=None):
 
 def build(out_path, when, winners, nominees):
     prs = new_deck()
-    slide_title(prs, when, len(winners))
+    slide_title(prs, when)
     if nominees:
         slide_nominees(prs, nominees)
     for i, (name, photo) in enumerate(winners, 1):
