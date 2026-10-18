@@ -2167,10 +2167,8 @@ async function resetAllData() {
 // keeps working offline.
 // ═══════════════════════════════════════════════════════════
 /** Opening line, shared by the on-screen ceremony and the exported deck. */
-function meetTodayLine(count) {
-  return count === 1
-    ? "Let's meet today's Best Worshiper!"
-    : `Let's meet today's ${count} Best Worshipers!`;
+function meetTodayLine() {
+  return "Let's meet today's ? Best Worshipers!";
 }
 
 const EMU_PER_INCH = 914400;
@@ -2591,14 +2589,14 @@ async function photoForSlide(kid, size = 900) {
 }
 
 /** The opening slide, shared with the launcher so the two look the same. */
-function titleSlideShapes(winnerCount, when) {
+function titleSlideShapes(when) {
   const GOLD = 'FFD740', TEXT = 'E8EAF6', DIM = '8A8D9E';
   return [
     pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
     pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
     pptText({ x: 0, y: inEmu(4.2), w: DECK_W, h: inEmu(1.8), lines: 'Best Worshiper', size: 96, color: GOLD, bold: true }),
     pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.0), lines: when, size: 40, color: DIM }),
-    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: meetTodayLine(winnerCount), size: 40, color: TEXT }),
+    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: meetTodayLine(), size: 40, color: TEXT }),
   ];
 }
 
@@ -2615,7 +2613,7 @@ async function buildAwardPptx() {
   const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
 
   // 1. Title
-  slides.push({ xml: titleSlideShapes(winners.length, when) });
+  slides.push({ xml: titleSlideShapes(when) });
 
   // 2. Nominees
   if (nominees.length) {
@@ -2961,7 +2959,7 @@ function renderCeremony() {
       <div class="cm-emoji">🏆</div>
       <div class="cm-big">Best Worshiper</div>
       <div class="cm-sub">${state.currentWeekDate}</div>
-      <div class="cm-sub">${meetTodayLine(total)}</div>`;
+      <div class="cm-sub">${meetTodayLine()}</div>`;
     hint.textContent = 'Tap to begin';
   } else if (s.kind === 'nominees') {
     stage.innerHTML = `
