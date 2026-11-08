@@ -3,7 +3,11 @@
 
 One beat per slide, so a single click advances the ceremony:
 
-    title -> nominees (faces) -> [suspense -> reveal] x winners -> finale
+    title -> nominees -> [ready -> roulette -> landing] x winners -> finale
+
+The nominees, ready and landing slides wait for a click; the roulette slides
+between them advance by themselves. Without a nominee list each winner gets a
+drumroll and a reveal slide instead.
 
 Canvas matches the EM Service template (20 x 11.25in) so the deck can be
 inserted into the Sunday service PPT without rescaling.
@@ -16,6 +20,7 @@ import argparse
 import base64
 import io
 import json
+import random
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -24,6 +29,8 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.oxml.ns import qn
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Emu, Inches, Pt
 from PIL import Image
 
@@ -127,38 +134,122 @@ def oval(slide, x, y, size, color):
     return shape
 
 
-def slide_nominees(prs, nominees):
-    """Every nominee's face and name, in the largest grid that fits."""
-    slide = blank(prs)
-    text_box(slide, 0, Inches(0.8), SLIDE_W, Inches(1.2),
-             f"Today's Nominees · {len(nominees)}", 54, ACCENT, True, EN_FONT)
+def grey_photo(photo):
+    """The same photo in dim grey, for the faces still waiting to be revealed."""
+    with Image.open(io.BytesIO(photo)) as im:
+        grey = im.convert('L').point(lambda v: v // 2)
+        out = io.BytesIO()
+        grey.convert('RGB').save(out, 'JPEG', quality=85)
+    return out.getvalue()
 
-    top = Inches(2.3)
-    area_w, area_h = SLIDE_W - Inches(1.6), SLIDE_H - top - Inches(0.5)
-    cols, rows, face = face_grid(len(nominees), area_w, area_h, 0.32, Inches(3.4))
-    face = int(face)
-    cell_w = min(area_w / cols, face / 0.7)
-    cell_h = face * 1.42
-    ring = int(face * 0.04)
-    name_size = max(14, min(40, round(face / Inches(1) * 18)))
-    off_x = (SLIDE_W - cell_w * cols) / 2
-    off_y = top + (area_h - cell_h * rows) / 2
 
-    for i, (name, photo) in enumerate(nominees):
-        r = i // cols
-        # Centre a short last row instead of leaving it hanging left.
-        in_row = len(nominees) - r * cols if r == rows - 1 else cols
-        x = int(off_x + (cols - in_row) * cell_w / 2 + (i % cols) * cell_w + (cell_w - face) / 2)
-        y = int(off_y + r * cell_h)
-        oval(slide, x - ring, y - ring, face + ring * 2, GOLD)
-        if photo:
-            add_round_photo(slide, photo, x, y, face)
-        else:
-            oval(slide, x, y, face, RGBColor(0x1C, 0x1F, 0x2A))
-            text_box(slide, x, y, face, face, '🧒', round(face / Inches(1) * 40))
-        text_box(slide, int(x + face / 2 - cell_w / 2), y + face + ring, int(cell_w), int(face * 0.3),
-                 name, name_size, TEXT, True)
-    return slide
+# How each look draws a face: size, ring colour, photo and name colour. Matches the app.
+LOOKS = {
+    'color': (1.0, GOLD, 'color', TEXT),
+    'grey': (1.0, RGBColor(0x3A, 0x3D, 0x4A), 'grey', DIM),
+    'spot': (1.35, ACCENT, 'grey', TEXT),
+    'won': (1.15, GOLD, 'color', GOLD),
+    'land': (1.7, GOLD, 'color', GOLD),
+}
+LOOK_ORDER = ['color', 'grey', 'won', 'spot', 'land']   # bigger faces drawn over their neighbours
+
+# The roulette: how long each enlarged face stays before the next, slowing to a stop.
+SPIN_DELAYS = [110, 110, 120, 130, 140, 155, 170, 190, 215, 245, 280, 325, 380, 450, 540, 650]
+
+
+def spin_sequence(eligible, winner):
+    """Random faces to enlarge in turn, never the same twice running, and never
+    the winner just before the landing, or the roulette would seem to stop early."""
+    if len(eligible) < 2:
+        return []
+    seq, cur = [], None
+    for n, ms in enumerate(SPIN_DELAYS):
+        last = n == len(SPIN_DELAYS) - 1
+        options = [i for i in eligible if i != cur and not (last and i == winner)]
+        cur = random.choice(options) if options else cur
+        seq.append((cur, ms))
+    return seq
+
+
+def auto_advance(slide, ms):
+    """Moves the show on by itself after ms; a click still works too."""
+    trans = OxmlElement('p:transition')
+    trans.set('spd', 'fast')
+    trans.set('advTm', str(ms))
+    slide._element.find(qn('p:clrMapOvr')).addnext(trans)
+
+
+class Grid:
+    """Where each nominee's face sits, and the slides played on that grid."""
+
+    def __init__(self, kids):
+        self.kids = [(name, photo, grey_photo(photo) if photo else None) for name, photo in kids]
+        self.top = Inches(2.3)
+        area_w, area_h = SLIDE_W - Inches(1.6), SLIDE_H - self.top - Inches(0.5)
+        cols, rows, face = face_grid(len(kids), area_w, area_h, 0.32, Inches(3.4))
+        self.face = int(face)
+        self.cell_w = min(area_w / cols, self.face / 0.7)
+        cell_h = self.face * 1.42
+        self.name_size = max(14, min(40, round(self.face / Inches(1) * 18)))
+        off_x = (SLIDE_W - self.cell_w * cols) / 2
+        off_y = self.top + (area_h - cell_h * rows) / 2
+        self.centres = []
+        for i in range(len(kids)):
+            r = i // cols
+            # Centre a short last row instead of leaving it hanging left.
+            in_row = len(kids) - r * cols if r == rows - 1 else cols
+            self.centres.append((off_x + (cols - in_row) * self.cell_w / 2 + (i % cols) * self.cell_w + self.cell_w / 2,
+                                 off_y + r * cell_h + self.face / 2))
+
+    def slide(self, prs, title, look_of):
+        slide = blank(prs)
+        text_box(slide, 0, Inches(0.8), SLIDE_W, Inches(1.2), title, 54, ACCENT, True, EN_FONT)
+        order = sorted(range(len(self.kids)), key=lambda i: LOOK_ORDER.index(look_of(i)))
+        for i in order:
+            name, color, grey = self.kids[i]
+            scale, ring_color, which, name_color = LOOKS[look_of(i)]
+            size = int(self.face * scale)
+            ring = int(size * 0.04)
+            name_h = int(size * 0.3)
+            cx, cy = self.centres[i]
+            # Keep an enlarged face, ring and name on the slide and below the title.
+            x = int(min(max(cx - size / 2, ring + Inches(0.1)), SLIDE_W - size - ring - Inches(0.1)))
+            y = int(min(max(cy - size / 2, Inches(2.0) + ring), SLIDE_H - size - ring - name_h))
+            oval(slide, x - ring, y - ring, size + ring * 2, ring_color)
+            photo = color if which == 'color' else grey
+            if photo:
+                add_round_photo(slide, photo, x, y, size)
+            else:
+                oval(slide, x, y, size, RGBColor(0x1C, 0x1F, 0x2A))
+                text_box(slide, x, y, size, size, '🧒', round(size / Inches(1) * 40))
+            name_w = int(self.cell_w * scale)
+            text_box(slide, int(x + size / 2 - name_w / 2), y + size + ring, name_w, name_h,
+                     name, round(self.name_size * scale), name_color, True)
+        return slide
+
+
+def grid_slides(prs, nominees, winners):
+    """The nominees in colour, then per winner: everyone greyed with "1 / 6" on
+    top, the roulette slides that advance by themselves, and the winner landing
+    in colour, enlarged. Winners stay in colour, a little larger, afterwards."""
+    names = [n for n, _ in nominees]
+    kids = list(nominees) + [w for w in winners if w[0] not in names]
+    grid = Grid(kids)
+    index = {name: i for i, (name, _) in reversed(list(enumerate(kids)))}
+
+    grid.slide(prs, f"Today's Nominees · {len(kids)}", lambda i: 'color')
+    won = set()
+    for k, (name, _) in enumerate(winners, 1):
+        title = f'Best Worshiper  {k} / {len(winners)}'
+        base = lambda i, won=frozenset(won): 'won' if i in won else 'grey'
+        grid.slide(prs, title, base)
+        target = index[name]
+        eligible = [i for i in range(len(kids)) if i not in won]
+        for spot, ms in spin_sequence(eligible, target):
+            slide = grid.slide(prs, title, lambda i, spot=spot, base=base: 'spot' if i == spot else base(i))
+            auto_advance(slide, ms)
+        grid.slide(prs, title, lambda i, base=base: 'land' if i == target else base(i))
+        won.add(target)
 
 
 def slide_suspense(prs, index, total):
@@ -259,10 +350,11 @@ def build(out_path, when, winners, nominees):
     prs = new_deck()
     slide_title(prs, when)
     if nominees:
-        slide_nominees(prs, nominees)
-    for i, (name, photo) in enumerate(winners, 1):
-        slide_suspense(prs, i, len(winners))
-        slide_reveal(prs, name, i, len(winners), photo)
+        grid_slides(prs, nominees, winners)
+    else:
+        for i, (name, photo) in enumerate(winners, 1):
+            slide_suspense(prs, i, len(winners))
+            slide_reveal(prs, name, i, len(winners), photo)
     slide_finale(prs, [n for n, _ in winners])
     prs.save(out_path)
     return len(prs.slides.__iter__.__self__._sldIdLst)
@@ -306,7 +398,7 @@ def main():
     print(f'  수상자 : {len(winners)}명 ({", ".join(n for n, _ in winners)})')
     print(f'  사진   : {photos}/{len(winners)}장')
     print(f'  후보   : {len(nominees)}명')
-    print(f'  슬라이드: {2 + (2 * len(winners)) + (1 if nominees else 0)}장')
+    print(f'  슬라이드: {len(Presentation(out).slides)}장')
 
 
 if __name__ == '__main__':

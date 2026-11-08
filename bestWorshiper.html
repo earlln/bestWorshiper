@@ -435,7 +435,7 @@ select:focus { outline: none; border-color: var(--accent); }
 .cm-nominee {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   width: calc(var(--face) * 1.25);
-  animation: popIn 0.45s cubic-bezier(0.2,1.4,0.4,1) both;
+  animation: popIn 0.45s cubic-bezier(0.2,1.4,0.4,1) backwards;  /* not "both": a held end state would pin the scale the reveals change */
 }
 .cm-nominee span {
   font-size: clamp(11px, calc(var(--face) * 0.16), 22px); font-weight: 700;
@@ -449,15 +449,21 @@ select:focus { outline: none; border-color: var(--accent); }
 }
 .cm-face-sm img, .cm-face-sm video { width: 100%; height: 100%; object-fit: cover; }
 
-/* Roulette: the faces sit stacked in the portrait circle and one shows at a time */
-.cm-roulette { position: relative; border-color: var(--accent); box-shadow: 0 0 60px rgba(108,99,255,0.45); }
-.cm-face { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; }
-.cm-face.on { display: flex; }
-.cm-face img, .cm-face video { width: 100%; height: 100%; object-fit: cover; }
-.cm-spin-name {
-  font-size: clamp(28px, 9vw, 72px); font-weight: 800; color: var(--text-dim);
-  margin-top: 18px; min-height: 1.2em; word-break: keep-all;
+/* Reveals on the grid: everyone fades to grey, the roulette enlarges faces in
+   turn, and each winner lands in colour, then stays a little larger */
+.cm-face-sm { transition: filter 0.6s, border-color 0.4s, box-shadow 0.4s; }
+.cm-nominee { position: relative; transition: transform 0.12s ease-out; }
+.cm-nominee span { transition: color 0.4s; }
+.cm-grid.greyed .cm-face-sm { filter: grayscale(1) brightness(0.45); border-color: rgba(255,255,255,0.15); }
+.cm-grid.greyed .cm-nominee span { color: var(--text-dim); }
+.cm-grid .cm-nominee.spot { transform: scale(1.35); z-index: 2; }
+.cm-grid .cm-nominee.spot .cm-face-sm { filter: grayscale(1) brightness(0.85); border-color: var(--accent); box-shadow: 0 0 24px rgba(108,99,255,0.7); }
+.cm-grid .cm-nominee.won { transform: scale(1.15); z-index: 1; }
+.cm-grid .cm-nominee.land { transform: scale(1.7); z-index: 3; transition: transform 0.6s cubic-bezier(0.2,1.4,0.4,1); }
+.cm-grid .cm-nominee.won .cm-face-sm, .cm-grid .cm-nominee.land .cm-face-sm {
+  filter: none; border-color: var(--gold); box-shadow: 0 0 30px rgba(255,215,64,0.6);
 }
+.cm-grid .cm-nominee.won span, .cm-grid .cm-nominee.land span { color: var(--gold); }
 
 .cm-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; }
 .cm-list span {
@@ -2424,9 +2430,12 @@ function pptPicture({ x, y, w, h, rId, geom = 'ellipse' }) {
     `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
 }
 
-const slideXml = (shapes, timing = '') => XML_HEAD +
+// advanceMs moves the show on by itself after that long; a click still works too.
+const slideXml = (shapes, timing = '', advanceMs = 0) => XML_HEAD +
   `<p:sld ${NS}><p:cSld><p:spTree>${emptyGroup()}${shapes.join('')}</p:spTree></p:cSld>` +
-  `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${timing}</p:sld>`;
+  `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>` +
+  (advanceMs ? `<p:transition spd="fast" advTm="${advanceMs}"/>` : '') +
+  `${timing}</p:sld>`;
 
 // ── Sound. The deck is what the congregation sees, so the drumroll and fanfare
 // from the ceremony screen are synthesised again here as WAV parts and set to
@@ -2527,7 +2536,7 @@ function pptAudio(sound) {
  * click, and the media node after the sequence lets the sound run until the
  * slide changes. Anything looser than this either stays silent or fails to open.
  */
-function pptAutoplayTiming(spid, durMs) {
+function pptAutoplayTiming(spid, durMs, numSlides = 1) {
   return '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot">' +
     '<p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq">' +
     '<p:childTnLst><p:par><p:cTn id="3" fill="hold">' +
@@ -2542,7 +2551,9 @@ function pptAutoplayTiming(spid, durMs) {
     '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>' +
     '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>' +
     '</p:seq>' +
-    '<p:audio><p:cMediaNode vol="80000" showWhenStopped="0"><p:cTn id="7" fill="hold" display="0">' +
+    // numSld above 1 is PowerPoint's "Play across slides".
+    `<p:audio><p:cMediaNode vol="80000"${numSlides > 1 ? ` numSld="${numSlides}"` : ''} showWhenStopped="0">` +
+    '<p:cTn id="7" fill="hold" display="0">' +
     '<p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>' +
     '<p:endCondLst><p:cond evt="onStopAudio" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:endCondLst>' +
     `</p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cMediaNode></p:audio>` +
@@ -2721,6 +2732,118 @@ function titleSlideShapes(when) {
   ];
 }
 
+/**
+ * The grid slides, mirroring the screen ceremony: the nominees in colour, then
+ * per winner a slide with everyone greyed and "1 / 6" on top, a run of slides
+ * that advance by themselves while faces are enlarged in turn (the roulette),
+ * and the landing slide with the winner in colour and enlarged. Winners stay in
+ * colour, a little larger, on every later slide.
+ */
+async function pushGridSlides(slides, kids, winners, addPhoto) {
+  const GOLD = 'FFD740', ACCENT = '6C63FF', TEXT = 'E8EAF6', DIM = '8A8D9E', SHADE = '3A3D4A';
+  const top = inEmu(2.3), areaW = DECK_W - inEmu(1.6), areaH = DECK_H - top - inEmu(0.5);
+  const { cols, rows, cellW, cellH, face } = faceGrid(kids.length, areaW, areaH, 0.32, inEmu(3.4));
+  const nameSize = Math.max(14, Math.min(40, Math.round(face / EMU_PER_INCH * 18)));
+  const offX = (DECK_W - cellW * cols) / 2;
+  const offY = top + (areaH - cellH * rows) / 2;
+
+  // Where each face sits (its centre), and its photo in colour and in grey.
+  const place = new Map();
+  for (let i = 0; i < kids.length; i++) {
+    const kid = kids[i];
+    const r = Math.floor(i / cols);
+    // Centre a short last row instead of leaving it hanging left.
+    const inRow = r === rows - 1 ? kids.length - r * cols : cols;
+    const jpeg = await photoForSlide(kid, 400);
+    place.set(kid.id, {
+      kid,
+      cx: offX + (cols - inRow) * cellW / 2 + (i % cols) * cellW + cellW / 2,
+      cy: offY + r * cellH + face / 2,
+      color: jpeg ? addPhoto(jpeg) : null,
+      grey: jpeg ? addPhoto(await greyJpeg(jpeg)) : null,
+    });
+  }
+
+  // How each look draws a face: size, ring, photo and name colour.
+  const LOOKS = {
+    color: { scale: 1,    ring: GOLD,   photo: 'color', name: TEXT },
+    grey:  { scale: 1,    ring: SHADE,  photo: 'grey',  name: DIM },
+    spot:  { scale: 1.35, ring: ACCENT, photo: 'grey',  name: TEXT },
+    won:   { scale: 1.15, ring: GOLD,   photo: 'color', name: GOLD },
+    land:  { scale: 1.7,  ring: GOLD,   photo: 'color', name: GOLD },
+  };
+  const ORDER = ['color', 'grey', 'won', 'spot', 'land'];   // bigger faces drawn over their neighbours
+
+  const gridSlide = (title, lookOf, extra = {}) => {
+    const shapes = [
+      pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
+      pptText({ x: 0, y: inEmu(0.8), w: DECK_W, h: inEmu(1.2), lines: title, size: 54, color: ACCENT, bold: true }),
+    ];
+    const images = [];
+    const rIdOf = name => {
+      let img = images.find(i => i.name === name);
+      if (!img) { img = { rId: `rId${10 + images.length}`, name }; images.push(img); }
+      return img.rId;
+    };
+    const ids = [...place.keys()].sort((a, b) => ORDER.indexOf(lookOf(a)) - ORDER.indexOf(lookOf(b)));
+    for (const id of ids) {
+      const p = place.get(id), look = LOOKS[lookOf(id)];
+      const size = Math.round(face * look.scale), ring = Math.round(size * 0.04);
+      const nameH = Math.round(size * 0.3);
+      // Keep an enlarged face, ring and name on the slide.
+      const x = Math.round(Math.min(Math.max(p.cx - size / 2, ring + inEmu(0.1)), DECK_W - size - ring - inEmu(0.1)));
+      const y = Math.round(Math.min(Math.max(p.cy - size / 2, inEmu(2.0) + ring), DECK_H - size - ring - nameH));
+      shapes.push(pptShape({ x: x - ring, y: y - ring, w: size + ring * 2, h: size + ring * 2, fill: look.ring, geom: 'ellipse' }));
+      const photo = p[look.photo];
+      if (photo) {
+        shapes.push(pptPicture({ x, y, w: size, h: size, rId: rIdOf(photo) }));
+      } else {
+        shapes.push(pptShape({ x, y, w: size, h: size, fill: '1C1F2A', geom: 'ellipse' }));
+        shapes.push(pptText({ x, y, w: size, h: size, lines: '🧒', size: Math.round(size / EMU_PER_INCH * 40), color: TEXT }));
+      }
+      const nameW = Math.round(cellW * look.scale);
+      shapes.push(pptText({ x: Math.round(x + size / 2 - nameW / 2), y: y + size + ring, w: nameW, h: nameH,
+        lines: p.kid.name, size: Math.round(nameSize * look.scale), color: look.name, bold: true }));
+    }
+    slides.push({ xml: shapes, images, ...extra });
+  };
+
+  gridSlide(`Today's Nominees · ${kids.length}`, () => 'color', { audio: 'drumroll' });
+
+  for (let i = 0; i < winners.length; i++) {
+    const title = `Best Worshiper  ${i + 1} / ${winners.length}`;
+    const won = new Set(winners.slice(0, i).map(k => k.id));
+    const base = id => won.has(id) ? 'won' : 'grey';
+    gridSlide(title, base);
+
+    const eligible = [...place.keys()].filter(id => !won.has(id));
+    const seq = spinSequence(eligible, winners[i].id);
+    seq.forEach((step, n) => gridSlide(title, id => id === step.id ? 'spot' : base(id), {
+      advanceMs: step.ms,
+      // One drumroll from the first roulette slide, carried across the rest of them.
+      ...(n === 0 ? { audio: 'drumroll', audioSlides: seq.length } : {}),
+    }));
+    gridSlide(title, id => id === winners[i].id ? 'land' : base(id), { audio: 'fanfare', confetti: true });
+  }
+}
+
+/** The same photo in dim grey, for the faces still waiting to be revealed. */
+async function greyJpeg(jpeg) {
+  const bmp = await createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' }));
+  const canvas = document.createElement('canvas');
+  canvas.width = bmp.width; canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bmp, 0, 0);
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) * 0.5;
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 async function buildAwardPptx() {
   const saved = savedWeek();
   const winners = saved.winnerIds.map(id => kidById(id));
@@ -2741,44 +2864,15 @@ async function buildAwardPptx() {
   // 1. Title
   slides.push({ xml: titleSlideShapes(when) });
 
-  // 2. Nominees
-  if (nominees.length) {
-    // A face and a name per nominee, in the largest grid that fits under the title.
-    const top = inEmu(2.3), areaW = DECK_W - inEmu(1.6), areaH = DECK_H - top - inEmu(0.5);
-    const { cols, rows, cellW, cellH, face } = faceGrid(nominees.length, areaW, areaH, 0.32, inEmu(3.4));
-    const nameH = Math.round(face * 0.3);
-    const nameSize = Math.max(14, Math.min(40, Math.round(face / EMU_PER_INCH * 18)));
-    const shapes = [bg(), pptText({ x: 0, y: inEmu(0.8), w: DECK_W, h: inEmu(1.2),
-      lines: `Today's Nominees · ${nominees.length}`, size: 54, color: ACCENT, bold: true })];
-    const images = [];
-    const offX = (DECK_W - cellW * cols) / 2;
-    const offY = top + (areaH - cellH * rows) / 2;
-    for (let i = 0; i < nominees.length; i++) {
-      const kid = nominees[i];
-      const r = Math.floor(i / cols);
-      // Centre a short last row instead of leaving it hanging left.
-      const inRow = r === rows - 1 ? nominees.length - r * cols : cols;
-      const x = Math.round(offX + (cols - inRow) * cellW / 2 + (i % cols) * cellW + (cellW - face) / 2);
-      const y = Math.round(offY + r * cellH);
-      const ring = Math.round(face * 0.04);
-      shapes.push(pptShape({ x: x - ring, y: y - ring, w: face + ring * 2, h: face + ring * 2, fill: GOLD, geom: 'ellipse' }));
-      const jpeg = await photoForSlide(kid, 400);
-      if (jpeg) {
-        const rId = `rId${10 + images.length}`;
-        images.push({ rId, name: addPhoto(jpeg) });
-        shapes.push(pptPicture({ x, y, w: face, h: face, rId }));
-      } else {
-        shapes.push(pptShape({ x, y, w: face, h: face, fill: '1C1F2A', geom: 'ellipse' }));
-        shapes.push(pptText({ x, y, w: face, h: face, lines: '🧒', size: Math.round(face / EMU_PER_INCH * 40), color: TEXT }));
-      }
-      shapes.push(pptText({ x: Math.round(x + face / 2 - cellW / 2), y: y + face + ring, w: Math.round(cellW), h: nameH,
-        lines: kid.name, size: nameSize, color: TEXT, bold: true }));
-    }
-    slides.push({ xml: shapes, images, audio: 'drumroll' });
+  // 2. The nominee grid, and every reveal played on it
+  const gridKids = nominees.length ? withWinners(nominees, winners) : [];
+  if (gridKids.length) {
+    await pushGridSlides(slides, gridKids, winners, addPhoto);
   }
 
+  // 3. Without a nominee list: a drumroll and a reveal for each winner
   // 3. A drumroll and a reveal for each winner
-  for (let i = 0; i < winners.length; i++) {
+  for (let i = 0; i < winners.length && !gridKids.length; i++) {
     const kid = winners[i];
     const label = `Best Worshiper  ${i + 1} / ${winners.length}`;
 
@@ -2899,12 +2993,12 @@ function pptxParts(slides, photos) {
     if (s.audio) {
       const { id, xml } = pptAudio(s.audio);
       s.xml.push(xml);
-      timing = pptAutoplayTiming(id, PPTX_SOUNDS[s.audio].ms);
+      timing = pptAutoplayTiming(id, PPTX_SOUNDS[s.audio].ms, s.audioSlides);
     }
     const sound = s.audio && PPTX_SOUNDS[s.audio].file;
     // The confetti goes in right after the background so everything else sits on top.
     if (s.confetti) s.xml.splice(1, 0, pptPicture({ x: 0, y: 0, w: DECK_W, h: DECK_H, rId: 'rId6', geom: 'rect' }));
-    files.push({ name: `ppt/slides/slide${i + 1}.xml`, data: utf8(slideXml(s.xml, timing)) });
+    files.push({ name: `ppt/slides/slide${i + 1}.xml`, data: utf8(slideXml(s.xml, timing, s.advanceMs)) });
     files.push({ name: `ppt/slides/_rels/slide${i + 1}.xml.rels`, data: utf8(XML_HEAD +
       `<Relationships ${RELS}>` +
       rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') +
@@ -3034,26 +3128,28 @@ async function exportAwardPptx() {
 // ═══════════════════════════════════════════════════════════
 const ceremony = {
   winners: [],   // kid records, in reveal order
-  nominees: [],  // kid records, shown once before the reveals begin
+  nominees: [],  // kid records on the grid: the nominees, plus any winner missing from them
   plan: [],      // one entry per screen, built when the ceremony opens
   step: 0,       // index into plan
   sound: true,
   audio: null,
   drumStop: null,
-  spin: null,    // the face roulette on a drumroll screen, while it runs
+  spin: null,    // the roulette across the grid, while it runs
 };
 
 /**
- * The running order: intro, the nominees, a drumroll and a reveal per winner,
- * then the finale. Spelling the screens out beats recomputing them from the
- * step number every time the nominees screen shifts everything along by one.
+ * The running order. With a nominee grid: intro, the nominees in colour, then
+ * for each winner a "ready" screen (everyone greyed, "1 / 6" on top) and a
+ * "spin" screen (the roulette lands on the winner), then the finale. Weeks
+ * saved without nominees fall back to a drumroll and a reveal per winner.
  */
 function buildCeremonyPlan() {
   const plan = [{ kind: 'intro' }];
-  if (ceremony.nominees.length) plan.push({ kind: 'nominees' });
+  const grid = ceremony.nominees.length > 0;
+  if (grid) plan.push({ kind: 'nominees' });
   ceremony.winners.forEach((_, i) => {
-    plan.push({ kind: 'suspense', index: i });
-    plan.push({ kind: 'reveal', index: i });
+    plan.push({ kind: grid ? 'ready' : 'suspense', index: i });
+    plan.push({ kind: grid ? 'spin' : 'reveal', index: i });
   });
   plan.push({ kind: 'finale' });
   return plan;
@@ -3068,12 +3164,39 @@ function openCeremony() {
     return;
   }
   ceremony.winners = saved.winnerIds.map(id => kidById(id));
-  ceremony.nominees = (saved.candidateIds || [])
-    .map(id => kidById(id)).filter(Boolean);
+  const nominees = (saved.candidateIds || []).map(id => kidById(id)).filter(Boolean);
+  ceremony.nominees = nominees.length ? withWinners(nominees, ceremony.winners) : [];
   ceremony.plan = buildCeremonyPlan();
   ceremony.step = 0;
   document.getElementById('ceremony').classList.remove('hidden');
   renderCeremony();
+}
+
+/** The nominees, with any winner not among them added, so every winner has a place on the grid. */
+function withWinners(nominees, winners) {
+  const ids = new Set(nominees.map(k => k.id));
+  return nominees.concat(winners.filter(k => !ids.has(k.id)));
+}
+
+/**
+ * The roulette for one winner: which face is enlarged and for how long, slowing
+ * down to a stop on the winner. Faces are picked at random from those not yet
+ * revealed, never the same one twice running, and the face just before the
+ * landing is never the winner's, or the roulette would seem to stop early.
+ * Shared by the screen and the deck so both play the same way.
+ */
+const SPIN_DELAYS = [110, 110, 120, 130, 140, 155, 170, 190, 215, 245, 280, 325, 380, 450, 540, 650];
+function spinSequence(eligibleIds, winnerId) {
+  if (eligibleIds.length < 2) return [];
+  const seq = [];
+  let cur = null;
+  SPIN_DELAYS.forEach((ms, n) => {
+    const last = n === SPIN_DELAYS.length - 1;
+    const options = eligibleIds.filter(id => id !== cur && !(last && id === winnerId));
+    cur = options.length ? options[Math.floor(Math.random() * options.length)] : cur;
+    seq.push({ id: cur, ms });
+  });
+  return seq;
 }
 
 function closeCeremony() {
@@ -3084,11 +3207,8 @@ function closeCeremony() {
 }
 
 function advanceCeremony() {
-  // A tap during the roulette slows it down; it moves on by itself once it lands.
-  if (ceremony.spin) {
-    if (!ceremony.spin.stopping) ceremony.spin.stop();
-    return;
-  }
+  // The roulette stops by itself; taps while it runs are ignored.
+  if (ceremony.spin) return;
   if (ceremony.step >= ceremony.plan.length - 1) { closeCeremony(); return; }
   ceremony.step++;
   renderCeremony();
@@ -3110,21 +3230,8 @@ function renderCeremony() {
       <div class="cm-sub">${state.currentWeekDate}</div>
       <div class="cm-sub">${meetTodayLine()}</div>`;
     hint.textContent = 'Tap to begin';
-  } else if (s.kind === 'nominees') {
-    const n = ceremony.nominees.length;
-    const { cols, face } = faceGrid(n, Math.min(innerWidth - 40, 1400), innerHeight * 0.62, 0.3, 180);
-    stage.innerHTML = `
-      <div class="cm-kicker">TODAY'S NOMINEES &middot; ${n}</div>
-      <div class="cm-grid" style="--face:${face}px;--cols:${cols}">
-        ${ceremony.nominees.map(k => `
-          <div class="cm-nominee">
-            <div class="cm-face-sm">${ceremonyFaceHTML(k)}</div>
-            <span>${escapeHtml(k.name)}</span>
-          </div>`).join('')}
-      </div>
-      <div class="cm-dim">Who will it be?</div>`;
-    hint.textContent = 'Tap to start the reveals';
-    startDrum();
+  } else if (['nominees', 'ready', 'spin'].includes(s.kind)) {
+    renderCeremonyGrid(s);
   } else if (s.kind === 'finale') {
     stage.innerHTML = `
       <div class="cm-kicker">TODAY'S BEST WORSHIPERS</div>
@@ -3135,28 +3242,15 @@ function renderCeremony() {
     burstConfetti(70);
     playFanfare();
   } else {
+    // No nominee list saved for this week: a plain drumroll and reveal per winner.
     const kid = ceremony.winners[s.index];
     if (s.kind === 'suspense') {
-      const pool = roulettePool(s.index);
-      if (pool.length >= 2) {
-        stage.innerHTML = `
-          <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
-          <div class="cm-photo cm-roulette">
-            ${pool.map(k => `<div class="cm-face">${ceremonyFaceHTML(k)}</div>`).join('')}
-          </div>
-          <div class="cm-spin-name"></div>
-          <div class="cm-dim">Who could it be?</div>`;
-        hint.textContent = 'Tap to stop';
-        startRoulette(pool, kid);
-      } else {
-        // No nominee list saved for this week, so there are no faces to cycle through.
-        stage.innerHTML = `
-          <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
-          <div class="cm-emoji cm-shake">🥁</div>
-          <div class="cm-big">Drumroll, please...</div>
-          <div class="cm-dim">Who could it be?</div>`;
-        hint.textContent = 'Tap to reveal';
-      }
+      stage.innerHTML = `
+        <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
+        <div class="cm-emoji cm-shake">🥁</div>
+        <div class="cm-big">Drumroll, please...</div>
+        <div class="cm-dim">Who could it be?</div>`;
+      hint.textContent = 'Tap to reveal';
       startDrum();
     } else {
       stage.innerHTML = `
@@ -3188,61 +3282,89 @@ function ceremonyFaceHTML(kid) {
     : `<img src="${url}" alt="">`;
 }
 
-/** Faces the roulette cycles through: the nominees not yet revealed, this winner always among them. */
-function roulettePool(index) {
-  const winner = ceremony.winners[index];
-  const revealed = new Set(ceremony.winners.slice(0, index).map(k => k.id));
-  const pool = ceremony.nominees.filter(k => !revealed.has(k.id));
-  if (!pool.some(k => k.id === winner.id)) pool.push(winner);
-  return pool;
+/**
+ * The nominee grid and every step played on it. The grid is built once and
+ * then only its classes change, so faces fade to grey, grow and shrink in place.
+ */
+function renderCeremonyGrid(s) {
+  const stage = document.getElementById('ceremony-stage');
+  const hint = document.getElementById('ceremony-hint');
+  let grid = stage.querySelector('.cm-grid');
+  if (!grid) {
+    const n = ceremony.nominees.length;
+    const { cols, face } = faceGrid(n, Math.min(innerWidth - 40, 1400), innerHeight * 0.62, 0.3, 180);
+    stage.innerHTML = `
+      <div class="cm-kicker"></div>
+      <div class="cm-grid" style="--face:${face}px;--cols:${cols}">
+        ${ceremony.nominees.map(k => `
+          <div class="cm-nominee" data-id="${k.id}">
+            <div class="cm-face-sm">${ceremonyFaceHTML(k)}</div>
+            <span>${escapeHtml(k.name)}</span>
+          </div>`).join('')}
+      </div>
+      <div class="cm-dim"></div>`;
+    grid = stage.querySelector('.cm-grid');
+    // Faces on the edge grow inward, so an enlarged one stays clear of the title and the screen edge.
+    const rows = Math.ceil(n / cols);
+    [...grid.children].forEach((tile, i) => {
+      const r = Math.floor(i / cols), c = i % cols;
+      const inRow = r === rows - 1 ? n - r * cols : cols;
+      tile.style.transformOrigin = `${inRow > 1 && c === 0 ? 'left' : inRow > 1 && c === inRow - 1 ? 'right' : 'center'} ` +
+        `${rows > 1 && r === 0 ? 'top' : rows > 1 && r === rows - 1 ? 'bottom' : 'center'}`;
+    });
+  }
+  const total = ceremony.winners.length;
+  const revealed = new Set(s.kind === 'nominees' ? [] : ceremony.winners.slice(0, s.index).map(k => k.id));
+  grid.classList.toggle('greyed', s.kind !== 'nominees');
+  for (const tile of grid.children) {
+    tile.classList.remove('spot', 'land');
+    tile.classList.toggle('won', revealed.has(Number(tile.dataset.id)));
+  }
+  stage.querySelector('.cm-kicker').innerHTML = s.kind === 'nominees'
+    ? `TODAY'S NOMINEES &middot; ${ceremony.nominees.length}`
+    : `BEST WORSHIPER ${s.index + 1} / ${total}`;
+  stage.querySelector('.cm-dim').textContent = 'Who will it be?';
+
+  if (s.kind === 'nominees') {
+    hint.textContent = 'Tap to start the reveals';
+  } else if (s.kind === 'ready') {
+    hint.textContent = 'Tap to spin';
+  } else {
+    hint.textContent = '';
+    startGridSpin(grid, s.index, revealed);
+  }
 }
 
-/**
- * Flicks through the faces until the presenter taps, then slows down over a
- * few seconds and lands on the winner, which opens the reveal screen.
- */
-function startRoulette(pool, winner) {
-  const stage = document.getElementById('ceremony-stage');
-  const faces = [...stage.querySelectorAll('.cm-face')];
-  const nameEl = stage.querySelector('.cm-spin-name');
-  const target = pool.findIndex(k => k.id === winner.id);
-  let cur = -1;
-  const show = i => {
-    if (cur >= 0) faces[cur].classList.remove('on');
-    faces[i].classList.add('on');
-    nameEl.textContent = pool[i].name;
-    cur = i;
-  };
-  // Any face but the one on screen (and, if asked, but the winner's).
-  const pick = (avoidTarget) => {
-    const options = pool.map((_, i) => i)
-      .filter(i => i !== cur && !(avoidTarget && i === target));
-    return options.length ? options[Math.floor(Math.random() * options.length)] : cur;
-  };
-
-  const spin = { stopping: false, timer: null };
+/** Enlarges faces in turn, slowing down, until it lands on the winner in colour. */
+function startGridSpin(grid, index, revealed) {
+  const winner = ceremony.winners[index];
+  const tileOf = id => grid.querySelector(`.cm-nominee[data-id="${id}"]`);
+  const eligible = ceremony.nominees.map(k => k.id).filter(id => !revealed.has(id));
+  const seq = spinSequence(eligible, winner.id);
+  const spin = { timer: null };
   ceremony.spin = spin;
-  const tick = () => { show(pick(false)); spin.timer = setTimeout(tick, 90); };
-  tick();
-
-  spin.stop = () => {
-    spin.stopping = true;
-    clearTimeout(spin.timer);
-    document.getElementById('ceremony-hint').textContent = '';
-    const delays = [100, 120, 140, 165, 195, 230, 270, 320, 380, 450, 540];
-    let n = 0;
-    const slow = () => {
-      if (n < delays.length) {
-        // The face before the landing must not be the winner's, or it would seem to stop early.
-        show(pick(n === delays.length - 1));
-        spin.timer = setTimeout(slow, delays[n++]);
-      } else {
-        ceremony.spin = null;
-        advanceCeremony();
-      }
-    };
-    slow();
+  startDrum();
+  let prev = null, n = 0;
+  const land = () => {
+    if (prev) prev.classList.remove('spot');
+    const tile = tileOf(winner.id);
+    tile.classList.add('land');
+    grid.parentElement.querySelector('.cm-dim').textContent = '';
+    ceremony.spin = null;
+    stopDrum();
+    burstConfetti(45);
+    playFanfare();
+    document.getElementById('ceremony-hint').textContent =
+      index + 1 < ceremony.winners.length ? 'Tap for the next one' : 'Tap to finish';
   };
+  const tick = () => {
+    if (n >= seq.length) { land(); return; }
+    if (prev) prev.classList.remove('spot');
+    prev = tileOf(seq[n].id);
+    prev.classList.add('spot');
+    spin.timer = setTimeout(tick, seq[n++].ms);
+  };
+  tick();
 }
 
 function stopRoulette() {
