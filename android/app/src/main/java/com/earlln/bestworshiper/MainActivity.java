@@ -34,9 +34,14 @@ import androidx.core.content.FileProvider;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.webkit.WebViewAssetLoader;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Hosts the bestWorshiper web app inside a WebView.
@@ -420,6 +425,96 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        /**
+         * Starts a file under Download/bestWorshiper the page writes piece by piece. A backup carries
+         * every photo and video, and handing it over as one base64 string runs the
+         * WebView out of string length long before the phone runs out of space.
+         * Returns a handle for appendText/finishFile, or "" if the file can't be made.
+         */
+        @JavascriptInterface
+        public String beginFile(String fileName, String mimeType) {
+            PendingFile pf = new PendingFile();
+            pf.name = fileName;
+            pf.mime = mimeType;
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                    values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + PHONE_DIR + "/");
+                    values.put(MediaStore.Downloads.IS_PENDING, 1);
+                    pf.uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (pf.uri == null) throw new IllegalStateException("insert failed");
+                    OutputStream out = getContentResolver().openOutputStream(pf.uri);
+                    if (out == null) throw new IllegalStateException("stream failed");
+                    pf.out = new BufferedOutputStream(out, 1 << 16);
+                } else {
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), PHONE_DIR);
+                    if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("mkdir failed");
+                    pf.file = new File(dir, fileName);
+                    pf.out = new BufferedOutputStream(new FileOutputStream(pf.file), 1 << 16);
+                }
+            } catch (Exception e) {
+                discard(pf);
+                toast("저장 실패: " + e.getMessage());
+                return "";
+            }
+            String id = UUID.randomUUID().toString();
+            pendingFiles.put(id, pf);
+            return id;
+        }
+
+        /** Appends text, as UTF-8, to a file from beginFile. False means it was abandoned. */
+        @JavascriptInterface
+        public boolean appendText(String id, String text) {
+            PendingFile pf = pendingFiles.get(id);
+            if (pf == null) return false;
+            try {
+                pf.out.write(text.getBytes(StandardCharsets.UTF_8));
+                return true;
+            } catch (Exception | OutOfMemoryError e) {
+                pendingFiles.remove(id);
+                discard(pf);
+                toast("저장 실패: " + e.getMessage());
+                return false;
+            }
+        }
+
+        /** Closes a file from beginFile and makes it visible in Download/bestWorshiper. */
+        @JavascriptInterface
+        public boolean finishFile(String id) {
+            PendingFile pf = pendingFiles.remove(id);
+            if (pf == null) return false;
+            try {
+                pf.out.close();
+                pf.out = null;
+                if (pf.uri != null) {
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.IS_PENDING, 0);
+                    getContentResolver().update(pf.uri, values, null, null);
+                } else {
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        dm.addCompletedDownload(pf.name, pf.name, true, pf.mime,
+                                pf.file.getAbsolutePath(), pf.file.length(), true);
+                    }
+                }
+                toast("Download/" + PHONE_DIR + " 에 저장되었습니다: " + pf.name);
+                return true;
+            } catch (Exception e) {
+                discard(pf);
+                toast("저장 실패: " + e.getMessage());
+                return false;
+            }
+        }
+
+        /** Drops a half-written file from beginFile, so no broken backup is left behind. */
+        @JavascriptInterface
+        public void abortFile(String id) {
+            PendingFile pf = pendingFiles.remove(id);
+            if (pf != null) discard(pf);
+        }
+
         /** Asks for a folder to offer among the export targets. */
         @JavascriptInterface
         public void pickDestinationFolder() {
@@ -627,5 +722,22 @@ public class MainActivity extends AppCompatActivity {
         private void toast(final String msg) {
             MainActivity.this.toast(msg);
         }
+
+        private void discard(PendingFile pf) {
+            try { if (pf.out != null) pf.out.close(); } catch (Exception ignored) {}
+            try { if (pf.uri != null) getContentResolver().delete(pf.uri, null, null); } catch (Exception ignored) {}
+            if (pf.file != null) pf.file.delete();
+        }
     }
+
+    /** A Downloads file the page is still writing through beginFile/appendText. */
+    private static class PendingFile {
+        String name;
+        String mime;
+        Uri uri;
+        File file;
+        OutputStream out;
+    }
+
+    private final Map<String, PendingFile> pendingFiles = new ConcurrentHashMap<>();
 }
