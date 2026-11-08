@@ -2092,20 +2092,84 @@ function base64ToBlob(dataUrl) {
   return fetch(dataUrl).then(r => r.blob());
 }
 
+let exporting = false;
+
+/**
+ * Writes the backup a piece at a time. Every photo and video rides along as a
+ * data URL, so the whole file can run to hundreds of megabytes: built as one
+ * string it hit the browser's string length limit and the export died silently.
+ */
 async function exportData() {
-  const kids = await Promise.all(state.kids.map(async k => ({
-    ...k,
-    media: k.media ? await blobToBase64(k.media) : null,
-  })));
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    kids,
-    weeks: state.weeks,
-    points: state.points,
-    settings: state.settings,
+  if (exporting) return;
+  exporting = true;
+  const fileName = `bestWorshiper_backup_${todayStr()}.json`;
+  let out = null;
+  try {
+    showToast('Exporting backup…');
+    out = openBackupWriter(fileName);
+    out.write(`{"exportedAt":${JSON.stringify(new Date().toISOString())},"kids":[`);
+    for (let i = 0; i < state.kids.length; i++) {
+      const { media, ...rest } = state.kids[i];
+      // The record without its media, reopened so the data URL can be streamed in.
+      out.write((i ? ',' : '') + JSON.stringify(rest).slice(0, -1) + ',"media":');
+      if (media) {
+        out.write(`"data:${media.type || 'application/octet-stream'};base64,`);
+        // Slices a multiple of 3 bytes long encode to base64 that joins cleanly.
+        const SLICE = 3 * 256 * 1024;
+        for (let off = 0; off < media.size; off += SLICE) {
+          const url = await blobToBase64(media.slice(off, off + SLICE));
+          out.write(url.slice(url.indexOf(',') + 1));
+        }
+        out.write('"}');
+      } else {
+        out.write('null}');
+      }
+      showToast(`Exporting backup… ${i + 1}/${state.kids.length}`);
+    }
+    out.write(`],"weeks":${JSON.stringify(state.weeks)},"points":${JSON.stringify(state.points)},` +
+      `"settings":${JSON.stringify(state.settings)}}`);
+    out.finish();
+  } catch (e) {
+    console.error('backup export failed', e);
+    if (out) out.abort();
+    showToast(`Export failed: ${e.message || e}`);
+  } finally {
+    exporting = false;
+  }
+}
+
+/**
+ * Where the backup pieces go: straight into a Downloads file inside the Android
+ * app, or into a Blob the browser downloads at the end.
+ */
+function openBackupWriter(fileName) {
+  const bridge = window.AndroidBridge;
+  if (bridge && typeof bridge.beginFile === 'function') {
+    const id = bridge.beginFile(fileName, 'application/json');
+    if (!id) throw new Error('could not create the file');
+    return {
+      write(text) { if (!bridge.appendText(id, text)) throw new Error('write failed'); },
+      finish() { if (!bridge.finishFile(id)) throw new Error('could not finish the file'); },
+      abort() { bridge.abortFile(id); },
+    };
+  }
+  const parts = [];
+  return {
+    write(text) { parts.push(text); },
+    finish() {
+      const url = URL.createObjectURL(new Blob(parts, { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoking at once can leave an empty file when the browser asks where to save.
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      showToast('Exported.');
+    },
+    abort() { parts.length = 0; },
   };
-  const json = JSON.stringify(payload, null, 2);
-  saveToDevice(`bestWorshiper_backup_${todayStr()}.json`, json, 'application/json');
 }
 
 /**
@@ -2131,9 +2195,14 @@ function saveToDevice(fileName, text, mimeType) {
 }
 
 async function importData(file) {
-  const text = await file.text();
   let data;
-  try { data = JSON.parse(text); } catch (e) { showToast('Not a valid JSON file.'); return; }
+  try {
+    data = JSON.parse(await file.text());
+  } catch (e) {
+    // A file too big to read into one string fails here too, so say what went wrong.
+    showToast(e instanceof SyntaxError ? 'Not a valid JSON file.' : `Import failed: ${e.message || e}`);
+    return;
+  }
   if (!confirm('Importing replaces everything currently stored. Continue?')) return;
 
   await dbClear('kids'); await dbClear('weeks'); await dbClear('points'); await dbClear('settings');
