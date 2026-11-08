@@ -427,6 +427,38 @@ select:focus { outline: none; border-color: var(--accent); }
 }
 .cm-photo img, .cm-photo video { width: 100%; height: 100%; object-fit: cover; }
 
+/* Nominees: a face and a name each, sized by renderCeremony to fit them all */
+.cm-grid {
+  display: flex; flex-wrap: wrap; gap: 14px 18px; justify-content: center; margin-top: 8px;
+  max-width: calc(var(--cols) * (var(--face) * 1.25 + 18px));
+}
+.cm-nominee {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: calc(var(--face) * 1.25);
+  animation: popIn 0.45s cubic-bezier(0.2,1.4,0.4,1) both;
+}
+.cm-nominee span {
+  font-size: clamp(11px, calc(var(--face) * 0.16), 22px); font-weight: 700;
+  color: var(--gold); line-height: 1.2; word-break: keep-all;
+}
+.cm-face-sm {
+  width: var(--face); height: var(--face); border-radius: 50%; overflow: hidden;
+  border: 3px solid rgba(255,215,64,0.7); background: #1c1f2a;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--face) * 0.55);
+}
+.cm-face-sm img, .cm-face-sm video { width: 100%; height: 100%; object-fit: cover; }
+
+/* Roulette: the faces sit stacked in the portrait circle and one shows at a time */
+.cm-roulette { position: relative; border-color: var(--accent); box-shadow: 0 0 60px rgba(108,99,255,0.45); }
+.cm-face { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; }
+.cm-face.on { display: flex; }
+.cm-face img, .cm-face video { width: 100%; height: 100%; object-fit: cover; }
+.cm-spin-name {
+  font-size: clamp(28px, 9vw, 72px); font-weight: 800; color: var(--text-dim);
+  margin-top: 18px; min-height: 1.2em; word-break: keep-all;
+}
+
 .cm-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; }
 .cm-list span {
   background: rgba(255,215,64,0.12); border: 1px solid rgba(255,215,64,0.5);
@@ -753,7 +785,7 @@ select:focus { outline: none; border-color: var(--accent); }
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.8.2';
+const APP_VERSION = '2.8.3';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2171,6 +2203,26 @@ function meetTodayLine() {
   return "Let's meet today's ? Best Worshipers!";
 }
 
+/**
+ * Lays n faces out in the grid that gives each the biggest circle inside a
+ * w x h area, leaving labelRatio of a face's height under it for the name.
+ * Units are whatever the caller passes (pixels on screen, EMU in the deck).
+ */
+function faceGrid(n, w, h, labelRatio, maxFace = Infinity) {
+  let best = null;
+  for (let cols = 1; cols <= Math.max(n, 1); cols++) {
+    const rows = Math.ceil(n / cols);
+    const face = Math.min(w / cols * 0.8, h / rows / (1 + labelRatio + 0.1), maxFace);
+    if (!best || face > best.face) best = { cols, rows, face };
+  }
+  const face = Math.floor(best.face);
+  return {
+    cols: best.cols, rows: best.rows, face,
+    cellW: Math.min(w / best.cols, face / 0.7),
+    cellH: face * (1 + labelRatio + 0.1),
+  };
+}
+
 const EMU_PER_INCH = 914400;
 const DECK_W = 20 * EMU_PER_INCH;      // matches the EM Service template,
 const DECK_H = 11.25 * EMU_PER_INCH;   // so slides can be inserted unscaled
@@ -2603,11 +2655,16 @@ function titleSlideShapes(when) {
 async function buildAwardPptx() {
   const saved = savedWeek();
   const winners = saved.winnerIds.map(id => kidById(id));
-  const nominees = saved.candidateIds.map(id => kidById(id).name);
+  const nominees = saved.candidateIds.map(id => kidById(id)).filter(Boolean);
   const when = state.currentWeekDate;
 
   const photos = [];   // {name, data}
-  const slides = [];   // {xml, imageRel, audio, confetti} — audio names a PPTX_SOUNDS entry
+  const slides = [];   // {xml, images: [{rId, name}], audio, confetti} — audio names a PPTX_SOUNDS entry
+  const addPhoto = data => {
+    const name = `image${photos.length + 1}.jpeg`;
+    photos.push({ name, data });
+    return name;
+  };
 
   const BG = '0D0F14', GOLD = 'FFD740', ACCENT = '6C63FF', TEXT = 'E8EAF6', DIM = '8A8D9E';
   const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
@@ -2617,21 +2674,38 @@ async function buildAwardPptx() {
 
   // 2. Nominees
   if (nominees.length) {
-    const cols = nominees.length <= 8 ? 2 : (nominees.length <= 15 ? 3 : 4);
-    const rows = Math.ceil(nominees.length / cols);
-    const colW = (DECK_W - inEmu(2)) / cols;
-    const rowH = Math.min(inEmu(1.1), (DECK_H - inEmu(3.4)) / Math.max(rows, 1));
-    const shapes = [bg(), pptText({ x: 0, y: inEmu(0.9), w: DECK_W, h: inEmu(1.2),
+    // A face and a name per nominee, in the largest grid that fits under the title.
+    const top = inEmu(2.3), areaW = DECK_W - inEmu(1.6), areaH = DECK_H - top - inEmu(0.5);
+    const { cols, rows, cellW, cellH, face } = faceGrid(nominees.length, areaW, areaH, 0.32, inEmu(3.4));
+    const nameH = Math.round(face * 0.3);
+    const nameSize = Math.max(14, Math.min(40, Math.round(face / EMU_PER_INCH * 18)));
+    const shapes = [bg(), pptText({ x: 0, y: inEmu(0.8), w: DECK_W, h: inEmu(1.2),
       lines: `Today's Nominees · ${nominees.length}`, size: 54, color: ACCENT, bold: true })];
-    nominees.forEach((name, i) => {
-      shapes.push(pptText({
-        x: Math.round(inEmu(1) + colW * Math.floor(i / rows)),
-        y: Math.round(inEmu(2.6) + rowH * (i % rows)),
-        w: Math.round(colW), h: Math.round(rowH),
-        lines: `· ${name}`, size: nominees.length > 15 ? 40 : 48, color: TEXT,
-      }));
-    });
-    slides.push({ xml: shapes, audio: 'drumroll' });
+    const images = [];
+    const offX = (DECK_W - cellW * cols) / 2;
+    const offY = top + (areaH - cellH * rows) / 2;
+    for (let i = 0; i < nominees.length; i++) {
+      const kid = nominees[i];
+      const r = Math.floor(i / cols);
+      // Centre a short last row instead of leaving it hanging left.
+      const inRow = r === rows - 1 ? nominees.length - r * cols : cols;
+      const x = Math.round(offX + (cols - inRow) * cellW / 2 + (i % cols) * cellW + (cellW - face) / 2);
+      const y = Math.round(offY + r * cellH);
+      const ring = Math.round(face * 0.04);
+      shapes.push(pptShape({ x: x - ring, y: y - ring, w: face + ring * 2, h: face + ring * 2, fill: GOLD, geom: 'ellipse' }));
+      const jpeg = await photoForSlide(kid, 400);
+      if (jpeg) {
+        const rId = `rId${10 + images.length}`;
+        images.push({ rId, name: addPhoto(jpeg) });
+        shapes.push(pptPicture({ x, y, w: face, h: face, rId }));
+      } else {
+        shapes.push(pptShape({ x, y, w: face, h: face, fill: '1C1F2A', geom: 'ellipse' }));
+        shapes.push(pptText({ x, y, w: face, h: face, lines: '🧒', size: Math.round(face / EMU_PER_INCH * 40), color: TEXT }));
+      }
+      shapes.push(pptText({ x: Math.round(x + face / 2 - cellW / 2), y: y + face + ring, w: Math.round(cellW), h: nameH,
+        lines: kid.name, size: nameSize, color: TEXT, bold: true }));
+    }
+    slides.push({ xml: shapes, images, audio: 'drumroll' });
   }
 
   // 3. A drumroll and a reveal for each winner
@@ -2655,11 +2729,9 @@ async function buildAwardPptx() {
       pptShape({ x: px - inEmu(0.18), y: py - inEmu(0.18), w: box + inEmu(0.36), h: box + inEmu(0.36), fill: GOLD, geom: 'ellipse' }),
     ];
 
-    let imageRel = null;
+    const images = [];
     if (jpeg) {
-      const name = `image${photos.length + 1}.jpeg`;
-      photos.push({ name, data: jpeg });
-      imageRel = name;
+      images.push({ rId: 'rId2', name: addPhoto(jpeg) });
       shapes.push(pptPicture({ x: px, y: py, w: box, h: box, rId: 'rId2' }));
     } else {
       shapes.push(pptShape({ x: px, y: py, w: box, h: box, fill: '1C1F2A', geom: 'ellipse' }));
@@ -2670,7 +2742,7 @@ async function buildAwardPptx() {
     const rw = DECK_W - rx - inEmu(1.2);
     shapes.push(pptText({ x: rx, y: inEmu(3.6), w: rw, h: inEmu(1.2), lines: '🏆  Congratulations!', size: 48, color: GOLD, bold: true, align: 'l' }));
     shapes.push(pptText({ x: rx, y: inEmu(5.0), w: rw, h: inEmu(2.2), lines: kid.name, size: 130, color: TEXT, bold: true, align: 'l' }));
-    slides.push({ xml: shapes, imageRel, audio: 'fanfare', confetti: true });
+    slides.push({ xml: shapes, images, audio: 'fanfare', confetti: true });
   }
 
   // 4. Finale
@@ -2767,7 +2839,7 @@ function pptxParts(slides, photos) {
     files.push({ name: `ppt/slides/_rels/slide${i + 1}.xml.rels`, data: utf8(XML_HEAD +
       `<Relationships ${RELS}>` +
       rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') +
-      (s.imageRel ? rel('rId2', 'image', `../media/${s.imageRel}`) : '') +
+      (s.images || []).map(img => rel(img.rId, 'image', `../media/${img.name}`)).join('') +
       (sound
         ? `<Relationship Id="rId3" Type="http://schemas.microsoft.com/office/2007/relationships/media" Target="../media/${sound}"/>` +
           rel('rId4', 'audio', `../media/${sound}`) +
@@ -2893,12 +2965,13 @@ async function exportAwardPptx() {
 // ═══════════════════════════════════════════════════════════
 const ceremony = {
   winners: [],   // kid records, in reveal order
-  nominees: [],  // names, shown once before the reveals begin
+  nominees: [],  // kid records, shown once before the reveals begin
   plan: [],      // one entry per screen, built when the ceremony opens
   step: 0,       // index into plan
   sound: true,
   audio: null,
   drumStop: null,
+  spin: null,    // the face roulette on a drumroll screen, while it runs
 };
 
 /**
@@ -2927,7 +3000,7 @@ function openCeremony() {
   }
   ceremony.winners = saved.winnerIds.map(id => kidById(id));
   ceremony.nominees = (saved.candidateIds || [])
-    .map(id => kidById(id)).filter(Boolean).map(k => k.name);
+    .map(id => kidById(id)).filter(Boolean);
   ceremony.plan = buildCeremonyPlan();
   ceremony.step = 0;
   document.getElementById('ceremony').classList.remove('hidden');
@@ -2935,12 +3008,18 @@ function openCeremony() {
 }
 
 function closeCeremony() {
+  stopRoulette();
   stopDrum();
   document.getElementById('ceremony').classList.add('hidden');
   document.getElementById('ceremony-confetti').innerHTML = '';
 }
 
 function advanceCeremony() {
+  // A tap during the roulette slows it down; it moves on by itself once it lands.
+  if (ceremony.spin) {
+    if (!ceremony.spin.stopping) ceremony.spin.stop();
+    return;
+  }
   if (ceremony.step >= ceremony.plan.length - 1) { closeCeremony(); return; }
   ceremony.step++;
   renderCeremony();
@@ -2951,6 +3030,7 @@ function renderCeremony() {
   const hint = document.getElementById('ceremony-hint');
   const total = ceremony.winners.length;
   const s = ceremonyStep();
+  stopRoulette();
   stopDrum();
   document.getElementById('ceremony-confetti').innerHTML = '';
 
@@ -2962,10 +3042,17 @@ function renderCeremony() {
       <div class="cm-sub">${meetTodayLine()}</div>`;
     hint.textContent = 'Tap to begin';
   } else if (s.kind === 'nominees') {
+    const n = ceremony.nominees.length;
+    const { cols, face } = faceGrid(n, Math.min(innerWidth - 40, 1400), innerHeight * 0.62, 0.3, 180);
     stage.innerHTML = `
-      <div class="cm-kicker">TODAY'S NOMINEES &middot; ${ceremony.nominees.length}</div>
-      <div class="cm-emoji cm-shake">🥁</div>
-      <div class="cm-list">${ceremony.nominees.map(n => `<span>${escapeHtml(n)}</span>`).join('')}</div>
+      <div class="cm-kicker">TODAY'S NOMINEES &middot; ${n}</div>
+      <div class="cm-grid" style="--face:${face}px;--cols:${cols}">
+        ${ceremony.nominees.map(k => `
+          <div class="cm-nominee">
+            <div class="cm-face-sm">${ceremonyFaceHTML(k)}</div>
+            <span>${escapeHtml(k.name)}</span>
+          </div>`).join('')}
+      </div>
       <div class="cm-dim">Who will it be?</div>`;
     hint.textContent = 'Tap to start the reveals';
     startDrum();
@@ -2981,12 +3068,26 @@ function renderCeremony() {
   } else {
     const kid = ceremony.winners[s.index];
     if (s.kind === 'suspense') {
-      stage.innerHTML = `
-        <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
-        <div class="cm-emoji cm-shake">🥁</div>
-        <div class="cm-big">Drumroll, please...</div>
-        <div class="cm-dim">Who could it be?</div>`;
-      hint.textContent = 'Tap to reveal';
+      const pool = roulettePool(s.index);
+      if (pool.length >= 2) {
+        stage.innerHTML = `
+          <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
+          <div class="cm-photo cm-roulette">
+            ${pool.map(k => `<div class="cm-face">${ceremonyFaceHTML(k)}</div>`).join('')}
+          </div>
+          <div class="cm-spin-name"></div>
+          <div class="cm-dim">Who could it be?</div>`;
+        hint.textContent = 'Tap to stop';
+        startRoulette(pool, kid);
+      } else {
+        // No nominee list saved for this week, so there are no faces to cycle through.
+        stage.innerHTML = `
+          <div class="cm-kicker">BEST WORSHIPER ${s.index + 1} / ${total}</div>
+          <div class="cm-emoji cm-shake">🥁</div>
+          <div class="cm-big">Drumroll, please...</div>
+          <div class="cm-dim">Who could it be?</div>`;
+        hint.textContent = 'Tap to reveal';
+      }
       startDrum();
     } else {
       stage.innerHTML = `
@@ -3007,6 +3108,78 @@ function ceremonyPhotoHTML(kid) {
   return kid.mediaType === 'video'
     ? `<video src="${url}" autoplay muted loop playsinline></video>`
     : `<img src="${url}" alt="">`;
+}
+
+/** A still face for the grid and the roulette: dozens of playing videos would stutter. */
+function ceremonyFaceHTML(kid) {
+  const url = mediaURL(kid);
+  if (!url) return '🧒';
+  return kid.mediaType === 'video'
+    ? `<video src="${url}" muted playsinline preload="auto"></video>`
+    : `<img src="${url}" alt="">`;
+}
+
+/** Faces the roulette cycles through: the nominees not yet revealed, this winner always among them. */
+function roulettePool(index) {
+  const winner = ceremony.winners[index];
+  const revealed = new Set(ceremony.winners.slice(0, index).map(k => k.id));
+  const pool = ceremony.nominees.filter(k => !revealed.has(k.id));
+  if (!pool.some(k => k.id === winner.id)) pool.push(winner);
+  return pool;
+}
+
+/**
+ * Flicks through the faces until the presenter taps, then slows down over a
+ * few seconds and lands on the winner, which opens the reveal screen.
+ */
+function startRoulette(pool, winner) {
+  const stage = document.getElementById('ceremony-stage');
+  const faces = [...stage.querySelectorAll('.cm-face')];
+  const nameEl = stage.querySelector('.cm-spin-name');
+  const target = pool.findIndex(k => k.id === winner.id);
+  let cur = -1;
+  const show = i => {
+    if (cur >= 0) faces[cur].classList.remove('on');
+    faces[i].classList.add('on');
+    nameEl.textContent = pool[i].name;
+    cur = i;
+  };
+  // Any face but the one on screen (and, if asked, but the winner's).
+  const pick = (avoidTarget) => {
+    const options = pool.map((_, i) => i)
+      .filter(i => i !== cur && !(avoidTarget && i === target));
+    return options.length ? options[Math.floor(Math.random() * options.length)] : cur;
+  };
+
+  const spin = { stopping: false, timer: null };
+  ceremony.spin = spin;
+  const tick = () => { show(pick(false)); spin.timer = setTimeout(tick, 90); };
+  tick();
+
+  spin.stop = () => {
+    spin.stopping = true;
+    clearTimeout(spin.timer);
+    document.getElementById('ceremony-hint').textContent = '';
+    const delays = [100, 120, 140, 165, 195, 230, 270, 320, 380, 450, 540];
+    let n = 0;
+    const slow = () => {
+      if (n < delays.length) {
+        // The face before the landing must not be the winner's, or it would seem to stop early.
+        show(pick(n === delays.length - 1));
+        spin.timer = setTimeout(slow, delays[n++]);
+      } else {
+        ceremony.spin = null;
+        advanceCeremony();
+      }
+    };
+    slow();
+  };
+}
+
+function stopRoulette() {
+  if (!ceremony.spin) return;
+  clearTimeout(ceremony.spin.timer);
+  ceremony.spin = null;
 }
 
 function renderCeremonyDots() {

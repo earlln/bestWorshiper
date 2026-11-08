@@ -3,7 +3,7 @@
 
 One beat per slide, so a single click advances the ceremony:
 
-    title -> nominees -> [suspense -> reveal] x winners -> finale
+    title -> nominees (faces) -> [suspense -> reveal] x winners -> finale
 
 Canvas matches the EM Service template (20 x 11.25in) so the deck can be
 inserted into the Sunday service PPT without rescaling.
@@ -25,6 +25,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
+from PIL import Image
 
 # Palette lifted from the app so the deck and the phone screen match.
 BG = RGBColor(0x0D, 0x0F, 0x14)
@@ -92,23 +93,71 @@ def slide_title(prs, when):
     return slide
 
 
-def slide_nominees(prs, names):
+def face_grid(n, w, h, label_ratio, max_face):
+    """Columns, rows and face size that give each of n faces the biggest circle
+    in a w x h area, with label_ratio of a face left under it for the name."""
+    best = None
+    for cols in range(1, max(n, 1) + 1):
+        rows = -(-n // cols)
+        face = min(w / cols * 0.8, h / rows / (1 + label_ratio + 0.1), max_face)
+        if best is None or face > best[2]:
+            best = (cols, rows, face)
+    return best
+
+
+def add_round_photo(slide, photo, x, y, size):
+    """A circular, centre-cropped portrait, so faces are not stretched."""
+    pic = slide.shapes.add_picture(io.BytesIO(photo), x, y, width=size, height=size)
+    with Image.open(io.BytesIO(photo)) as im:
+        w, h = im.size
+    if w > h:
+        pic.crop_left = pic.crop_right = (w - h) / w / 2
+    elif h > w:
+        pic.crop_top = pic.crop_bottom = (h - w) / h / 2
+    pic.auto_shape_type = MSO_SHAPE.OVAL
+    return pic
+
+
+def oval(slide, x, y, size, color):
+    shape = slide.shapes.add_shape(MSO_SHAPE.OVAL, x, y, size, size)
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+    shape.shadow.inherit = False
+    return shape
+
+
+def slide_nominees(prs, nominees):
+    """Every nominee's face and name, in the largest grid that fits."""
     slide = blank(prs)
-    text_box(slide, 0, Inches(0.9), SLIDE_W, Inches(1.2),
-             f"Today's Nominees · {len(names)}", 54, ACCENT, True, EN_FONT)
+    text_box(slide, 0, Inches(0.8), SLIDE_W, Inches(1.2),
+             f"Today's Nominees · {len(nominees)}", 54, ACCENT, True, EN_FONT)
 
-    # Lay the names out in up to four columns so a long list still fits.
-    cols = 2 if len(names) <= 8 else (3 if len(names) <= 15 else 4)
-    rows = -(-len(names) // cols)
-    col_w = (SLIDE_W - Inches(2.0)) / cols
-    top = Inches(2.6)
-    row_h = min(Inches(1.1), (SLIDE_H - top - Inches(0.8)) / max(rows, 1))
-    size = 40 if len(names) > 15 else 48
+    top = Inches(2.3)
+    area_w, area_h = SLIDE_W - Inches(1.6), SLIDE_H - top - Inches(0.5)
+    cols, rows, face = face_grid(len(nominees), area_w, area_h, 0.32, Inches(3.4))
+    face = int(face)
+    cell_w = min(area_w / cols, face / 0.7)
+    cell_h = face * 1.42
+    ring = int(face * 0.04)
+    name_size = max(14, min(40, round(face / Inches(1) * 18)))
+    off_x = (SLIDE_W - cell_w * cols) / 2
+    off_y = top + (area_h - cell_h * rows) / 2
 
-    for i, name in enumerate(names):
-        c, r = i // rows, i % rows
-        text_box(slide, Inches(1.0) + col_w * c, top + row_h * r, col_w, row_h,
-                 f'· {name}', size, TEXT)
+    for i, (name, photo) in enumerate(nominees):
+        r = i // cols
+        # Centre a short last row instead of leaving it hanging left.
+        in_row = len(nominees) - r * cols if r == rows - 1 else cols
+        x = int(off_x + (cols - in_row) * cell_w / 2 + (i % cols) * cell_w + (cell_w - face) / 2)
+        y = int(off_y + r * cell_h)
+        oval(slide, x - ring, y - ring, face + ring * 2, GOLD)
+        if photo:
+            add_round_photo(slide, photo, x, y, face)
+        else:
+            oval(slide, x, y, face, RGBColor(0x1C, 0x1F, 0x2A))
+            text_box(slide, x, y, face, face, '🧒', round(face / Inches(1) * 40))
+        text_box(slide, int(x + face / 2 - cell_w / 2), y + face + ring, int(cell_w), int(face * 0.3),
+                 name, name_size, TEXT, True)
     return slide
 
 
@@ -201,7 +250,8 @@ def load_from_backup(path, week_date=None):
 
     winners = [(kids[i]['name'], decode_photo(kids[i].get('media')))
                for i in week['winnerIds'] if i in kids]
-    nominees = [kids[i]['name'] for i in week['candidateIds'] if i in kids]
+    nominees = [(kids[i]['name'], decode_photo(kids[i].get('media')))
+                for i in week['candidateIds'] if i in kids]
     return week['date'], winners, nominees
 
 
@@ -237,7 +287,7 @@ def main():
         when = args.date or week_date
     elif args.winners:
         winners = [(n.strip(), None) for n in args.winners.split(',') if n.strip()]
-        nominees = [n.strip() for n in (args.nominees or '').split(',') if n.strip()]
+        nominees = [(n.strip(), None) for n in (args.nominees or '').split(',') if n.strip()]
         when = args.date or date.today().isoformat()
     else:
         raise SystemExit('--backup 또는 --winners 중 하나가 필요합니다.')
