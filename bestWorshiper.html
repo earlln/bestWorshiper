@@ -357,6 +357,10 @@ select:focus { outline: none; border-color: var(--accent); }
 .lightbox-box img, .lightbox-box video { max-width: 85vw; max-height: 80vh; border-radius: 8px; }
 
 /* ── Award ceremony (full screen, one tap per beat) ── */
+/* An exported ceremony file shows the ceremony and nothing else */
+body.ceremony-file > *:not(#ceremony):not(#toast) { display: none !important; }
+body.ceremony-file #ceremony-close { visibility: hidden; }
+
 .ceremony {
   position: fixed; inset: 0; z-index: 400;
   background: radial-gradient(circle at 50% 35%, #1a1d2b 0%, #0d0f14 70%);
@@ -394,7 +398,7 @@ select:focus { outline: none; border-color: var(--accent); }
 }
 @keyframes hintPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
 
-.cm-kicker { font-size: 15px; letter-spacing: 3px; color: var(--accent); font-weight: 700; margin-bottom: 14px; }
+.cm-kicker { font-size: clamp(15px, 2.2vw, 34px); letter-spacing: 3px; color: var(--accent); font-weight: 700; margin-bottom: 14px; }
 .cm-big { font-size: clamp(34px, 11vw, 92px); font-weight: 800; color: var(--gold); line-height: 1.15; }
 .cm-sub { font-size: clamp(15px, 4.5vw, 26px); color: var(--text); margin-top: 14px; }
 .cm-dim { font-size: 13px; color: var(--text-dim); margin-top: 10px; }
@@ -584,7 +588,7 @@ select:focus { outline: none; border-color: var(--accent); }
     <div class="week-actions">
       <button id="week-save-btn" class="btn accent">Save winners</button>
       <button id="ceremony-btn" class="btn">🎉 Start ceremony</button>
-      <button id="pptx-btn" class="btn">📊 Export PPT</button>
+      <button id="ceremony-file-btn" class="btn">🏆 시상식파일 내보내기</button>
     </div>
   </section>
 
@@ -654,7 +658,7 @@ select:focus { outline: none; border-color: var(--accent); }
 
 <div id="export-modal" class="modal hidden">
   <div class="modal-box" style="width:360px">
-    <div class="modal-title"><span>Save the deck to…</span><button class="modal-close" id="export-modal-close">✕</button></div>
+    <div class="modal-title"><span>Save the ceremony file to…</span><button class="modal-close" id="export-modal-close">✕</button></div>
     <div style="display:grid;gap:8px;margin-top:14px">
       <button id="export-phone-btn" class="btn accent" style="text-align:left">📱 This phone<br><small style="font-weight:400;opacity:.8">Download / bestWorshiper / EM</small></button>
       <button id="export-usb-btn" class="btn" style="text-align:left">🔌 USB drive<br><small style="font-weight:400;opacity:.8">Plug the drive in first; confirm the folder once</small></button>
@@ -724,9 +728,9 @@ select:focus { outline: none; border-color: var(--accent); }
         <p class="hint" style="margin-top:4px"><b>Android</b>: open in Chrome → menu (⋮) → "Add to Home screen" / "Install app"</p>
       </div>
       <div class="card">
-        <h3>📂 Deck folder</h3>
+        <h3>📂 Ceremony file folder</h3>
         <p class="hint">The folder on the USB stick (or under Download/bestWorshiper on the phone) that
-        <code>BestWorshiper_날짜.pptx</code> is saved into. Leave empty to save at the top.</p>
+        <code>BestWorshiper_날짜.html</code> is saved into. Leave empty to save at the top.</p>
         <div class="setting-row">
           <div class="setting-key">Subfolder</div>
           <div><input type="text" id="settings-deck-subfolder" value="EM" style="width:120px"></div>
@@ -788,6 +792,9 @@ select:focus { outline: none; border-color: var(--accent); }
 <div id="toast"></div>
 
 <script>
+// The page as loaded, kept before any script changes it: the ceremony file export copies it.
+const APP_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
@@ -873,7 +880,7 @@ const DEFAULT_SETTINGS = {
   recentWeeks: 5,      // the window of recorded weeks the attendance bonus looks at
   nominationBonus: 1,  // points for each week nominated inside that window
   ceremonyScript: DEFAULT_SCRIPT,
-  deckSubfolder: 'EM',   // folder on the stick or phone the deck is saved into
+  deckSubfolder: 'EM',   // folder on the stick or phone the ceremony file is saved into
 };
 
 const state = {
@@ -1953,7 +1960,7 @@ async function quickPoint(kidId, delta, date, reason) {
 // ═══════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════
-// ── Where the exported deck goes (Android only) ──
+// ── Where the exported ceremony file goes (Android only) ──
 let pendingExport = null;   // {sub, files: [{fileName, b64}, ...]} while the chooser is open
 
 function openExportChooser(files, sub) {
@@ -1973,9 +1980,9 @@ function closeExportChooser() {
 }
 
 /**
- * Sends the deck and then the link slide to one bridge call, waiting on the
- * picker when the first save opens it. The USB grant is held after that first
- * save, so the second file goes straight through.
+ * Sends each file to one bridge call, waiting on the picker when the first
+ * save opens it. The USB grant is held after that first save, so any further
+ * file goes straight through.
  */
 function exportFilesWith(call, where) {
   const files = pendingExport.files.slice();
@@ -1986,7 +1993,7 @@ function exportFilesWith(call, where) {
     // The bridge reports "saved:<name> (<size>)" so a short write shows up here.
     let result = '';
     if (!f.b64 || f.b64.length < 1000) {
-      // The deck is never this small; the page itself has gone wrong.
+      // The ceremony file is never this small; the page itself has gone wrong.
       showToast(`Internal error: ${f.fileName} came out empty (${f.b64 ? f.b64.length : 0} chars).`);
       return;
     }
@@ -2033,7 +2040,7 @@ function renderSettingsTab() {
   renderAttendancePreview();
 }
 
-/** The deck's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
+/** The ceremony file's subfolder as a clean relative path: no surrounding slashes, backslashes normalised. */
 function deckSubfolder(raw = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder) {
   return String(raw || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
 }
@@ -2267,13 +2274,14 @@ async function resetAllData() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PPTX EXPORT
+// CEREMONY FILE EXPORT
 //
-// A .pptx is a zip of XML parts, so the deck is written here directly
-// rather than pulling in a library — the app stays dependency-free and
-// keeps working offline.
+// The ceremony is shown from a PC at church, so it is exported as one HTML
+// file: this app's own page with the week's faces baked in, opening straight
+// into the ceremony. It needs no network, and the photos never leave the
+// phone except in that file.
 // ═══════════════════════════════════════════════════════════
-/** Opening line, shared by the on-screen ceremony and the exported deck. */
+/** Opening line of the ceremony. */
 function meetTodayLine() {
   return "Let's meet today's ? Best Worshipers!";
 }
@@ -2281,7 +2289,7 @@ function meetTodayLine() {
 /**
  * Lays n faces out in the grid that gives each the biggest circle inside a
  * w x h area, leaving labelRatio of a face's height under it for the name.
- * Units are whatever the caller passes (pixels on screen, EMU in the deck).
+ * Units are whatever the caller passes.
  */
 function faceGrid(n, w, h, labelRatio, maxFace = Infinity) {
   let best = null;
@@ -2298,390 +2306,10 @@ function faceGrid(n, w, h, labelRatio, maxFace = Infinity) {
   };
 }
 
-const EMU_PER_INCH = 914400;
-const DECK_W = 20 * EMU_PER_INCH;      // matches the EM Service template,
-const DECK_H = 11.25 * EMU_PER_INCH;   // so slides can be inserted unscaled
-
-const inEmu = inches => Math.round(inches * EMU_PER_INCH);
-
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[i] = c >>> 0;
-  }
-  return t;
-})();
-
-function crc32(bytes) {
-  let c = 0xFFFFFFFF;
-  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
-}
-
-/** Zip writer, stored (uncompressed): the XML is small and photos are already compressed. */
-function zipStore(files) {
-  const enc = new TextEncoder();
-  const parts = [];
-  const central = [];
-  let offset = 0;
-
-  for (const f of files) {
-    const name = enc.encode(f.name);
-    const data = f.data;
-    const crc = crc32(data);
-
-    const local = new DataView(new ArrayBuffer(30));
-    local.setUint32(0, 0x04034b50, true);
-    local.setUint16(4, 20, true);
-    local.setUint16(6, 0x0800, true);   // UTF-8 names
-    local.setUint16(8, 0, true);        // stored
-    local.setUint16(10, 0, true);
-    local.setUint16(12, 0x21, true);    // 1980-01-01
-    local.setUint32(14, crc, true);
-    local.setUint32(18, data.length, true);
-    local.setUint32(22, data.length, true);
-    local.setUint16(26, name.length, true);
-    local.setUint16(28, 0, true);
-    parts.push(new Uint8Array(local.buffer), name, data);
-
-    const cd = new DataView(new ArrayBuffer(46));
-    cd.setUint32(0, 0x02014b50, true);
-    cd.setUint16(4, 20, true);
-    cd.setUint16(6, 20, true);
-    cd.setUint16(8, 0x0800, true);
-    cd.setUint16(10, 0, true);
-    cd.setUint16(12, 0, true);
-    cd.setUint16(14, 0x21, true);
-    cd.setUint32(16, crc, true);
-    cd.setUint32(20, data.length, true);
-    cd.setUint32(24, data.length, true);
-    cd.setUint16(28, name.length, true);
-    cd.setUint32(38, 0, true);
-    cd.setUint32(42, offset, true);
-    central.push(new Uint8Array(cd.buffer), name);
-
-    offset += 30 + name.length + data.length;
-  }
-
-  const centralSize = central.reduce((s, c) => s + c.length, 0);
-  const eocd = new DataView(new ArrayBuffer(22));
-  eocd.setUint32(0, 0x06054b50, true);
-  eocd.setUint16(8, files.length, true);
-  eocd.setUint16(10, files.length, true);
-  eocd.setUint32(12, centralSize, true);
-  eocd.setUint32(16, offset, true);
-
-  const all = [...parts, ...central, new Uint8Array(eocd.buffer)];
-  const total = all.reduce((s, c) => s + c.length, 0);
-  const out = new Uint8Array(total);
-  let p = 0;
-  for (const c of all) { out.set(c, p); p += c.length; }
-  return out;
-}
-
-function xmlEscape(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
-}
-
-const utf8 = s => new TextEncoder().encode(s);
-const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-const NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
-  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
-  'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
-
-let shapeSeq = 1;
-const emptyGroup = () =>
-  '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
-  '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>' +
-  '<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
-
-function pptShape({ x, y, w, h, fill, geom = 'rect' }) {
-  const id = ++shapeSeq;
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="s${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
-    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
-    `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom>` +
-    `<a:solidFill><a:srgbClr val="${fill}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>` +
-    `<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
-}
-
-function pptText({ x, y, w, h, lines, size, color, bold = false, align = 'ctr', font = 'Segoe UI' }) {
-  const id = ++shapeSeq;
-  const paras = (Array.isArray(lines) ? lines : [lines]).map(line =>
-    `<a:p><a:pPr algn="${align}"/><a:r>` +
-    `<a:rPr lang="ko-KR" altLang="en-US" sz="${Math.round(size * 100)}" b="${bold ? 1 : 0}" dirty="0">` +
-    `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>` +
-    `<a:latin typeface="${font}"/><a:ea typeface="Malgun Gothic"/><a:cs typeface="${font}"/></a:rPr>` +
-    `<a:t>${xmlEscape(line)}</a:t></a:r></a:p>`).join('');
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="t${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>` +
-    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
-    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>` +
-    `<p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
-}
-
-function pptPicture({ x, y, w, h, rId, geom = 'ellipse' }) {
-  const id = ++shapeSeq;
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="pic${id}"/>` +
-    `<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>` +
-    `<p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
-    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>` +
-    `<a:prstGeom prst="${geom}"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
-}
-
-// advanceMs moves the show on by itself after that long; a click still works too.
-const slideXml = (shapes, timing = '', advanceMs = 0) => XML_HEAD +
-  `<p:sld ${NS}><p:cSld><p:spTree>${emptyGroup()}${shapes.join('')}</p:spTree></p:cSld>` +
-  `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>` +
-  (advanceMs ? `<p:transition spd="fast" advTm="${advanceMs}"/>` : '') +
-  `${timing}</p:sld>`;
-
-// ── Sound. The deck is what the congregation sees, so the drumroll and fanfare
-// from the ceremony screen are synthesised again here as WAV parts and set to
-// play the moment their slide appears. ──
-const WAV_RATE = 16000;   // effects, not speech — 16kHz keeps a 20s roll near 600KB
-
-/** 16-bit mono PCM around a float sample array. */
-function wavBytes(samples) {
-  const n = samples.length;
-  const v = new DataView(new ArrayBuffer(44 + n * 2));
-  const tag = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
-  tag(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); tag(8, 'WAVE');
-  tag(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, WAV_RATE, true); v.setUint32(28, WAV_RATE * 2, true);
-  v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  tag(36, 'data'); v.setUint32(40, n * 2, true);
-  for (let i = 0; i < n; i++) {
-    v.setInt16(44 + i * 2, Math.max(-32767, Math.min(32767, Math.round(samples[i] * 32767))), true);
-  }
-  return new Uint8Array(v.buffer);
-}
-
-/** The ceremony's drumroll: short noise hits, sixteen a second, every fourth one louder. */
-function drumrollWav(seconds = 20) {
-  const n = Math.floor(WAV_RATE * seconds);
-  const out = new Float32Array(n);
-  let t = 0.06, beat = 0;
-  while (t < seconds) {
-    const start = Math.floor(t * WAV_RATE), dur = Math.floor(WAV_RATE * 0.08);
-    const amp = beat % 4 === 0 ? 0.5 : 0.3;
-    let prev = 0;
-    for (let i = 0; i < dur && start + i < n; i++) {
-      const white = Math.random() * 2 - 1;
-      // First-difference highpass: keeps the snap a small speaker can reproduce.
-      out[start + i] += amp * Math.pow(1 - i / dur, 1.8) * (white - prev) * 0.7;
-      prev = white;
-    }
-    t += 0.055 + Math.random() * 0.02;
-    beat++;
-  }
-  return wavBytes(out);
-}
-
-/** The reveal fanfare: the same major-triad walk-up playFanfare uses. */
-function fanfareWav() {
-  const n = Math.floor(WAV_RATE * 1.5);
-  const out = new Float32Array(n);
-  [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-    const start = Math.floor(WAV_RATE * i * 0.11), dur = Math.floor(WAV_RATE * 0.7);
-    for (let k = 0; k < dur && start + k < n; k++) {
-      const x = k / WAV_RATE;
-      const env = Math.min(1, x / 0.03) * Math.exp(-x * 5);
-      const ph = (freq * x) % 1;
-      out[start + k] += 0.22 * env * (4 * Math.abs(ph - 0.5) - 1);   // triangle wave
-    }
-  });
-  return wavBytes(out);
-}
-
-const PPTX_SOUNDS = {
-  drumroll: { file: 'drumroll.wav', ms: 20000, make: drumrollWav },
-  fanfare:  { file: 'fanfare.wav',  ms: 1500,  make: fanfareWav },
-};
-
-// A 1x1 transparent PNG: the audio object needs a poster image, and this one
-// stays invisible in the editor as well as in the show.
-const POSTER_PNG = Uint8Array.from(
-  ('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489' +
-   '0000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082')
-  .match(/../g), h => parseInt(h, 16));
-
-/**
- * The audio object PowerPoint itself writes for Insert ▸ Audio, sitting in the
- * bottom-right corner. Its slide rels must carry rId3 (Microsoft's media
- * relationship), rId4 (the standard audio one) and rId5 (the poster) — the two
- * media relationships point at the same WAV, and PowerPoint wants both.
- */
-function pptAudio(sound) {
-  const id = ++shapeSeq;
-  const xml = `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${sound}">` +
-    '<a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr>' +
-    '<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>' +
-    '<p:nvPr><a:audioFile r:link="rId4"/>' +
-    '<p:extLst><p:ext uri="{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}">' +
-    '<p14:media xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" r:embed="rId3"/>' +
-    '</p:ext></p:extLst></p:nvPr></p:nvPicPr>' +
-    '<p:blipFill><a:blip r:embed="rId5"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>' +
-    `<p:spPr><a:xfrm><a:off x="${DECK_W - inEmu(0.8)}" y="${DECK_H - inEmu(0.8)}"/>` +
-    '<a:ext cx="487363" cy="487363"/></a:xfrm>' +
-    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>';
-  return { id, xml };
-}
-
-/**
- * Timing that starts the sound as the slide appears. This is the tree
- * PowerPoint writes for Playback ▸ Start: Automatically: the main sequence's
- * first node fires on the sequence's own onBegin instead of waiting for a
- * click, and the media node after the sequence lets the sound run until the
- * slide changes. Anything looser than this either stays silent or fails to open.
- */
-function pptAutoplayTiming(spid, durMs, numSlides = 1) {
-  return '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot">' +
-    '<p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq">' +
-    '<p:childTnLst><p:par><p:cTn id="3" fill="hold">' +
-    '<p:stCondLst><p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond></p:stCondLst>' +
-    '<p:childTnLst><p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
-    '<p:par><p:cTn id="5" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="afterEffect">' +
-    '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
-    `<p:cmd type="call" cmd="playFrom(0.0)"><p:cBhvr><p:cTn id="6" dur="${durMs}" fill="hold"/>` +
-    `<p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:cmd>` +
-    '</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>' +
-    '</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn>' +
-    '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>' +
-    '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>' +
-    '</p:seq>' +
-    // numSld above 1 is PowerPoint's "Play across slides".
-    `<p:audio><p:cMediaNode vol="80000"${numSlides > 1 ? ` numSld="${numSlides}"` : ''} showWhenStopped="0">` +
-    '<p:cTn id="7" fill="hold" display="0">' +
-    '<p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>' +
-    '<p:endCondLst><p:cond evt="onStopAudio" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:endCondLst>' +
-    `</p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cMediaNode></p:audio>` +
-    '</p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
-}
-
-// ── Confetti. PowerPoint loops an animated GIF during the show with no timing
-// tree at all, so the reveal and finale slides get one behind the photo and
-// the name. It is drawn into an indexed buffer and LZW-packed here, since the
-// app carries no image files of its own. ──
-const CONFETTI_W = 800, CONFETTI_H = 450;
-const CONFETTI_FRAMES = 36, CONFETTI_DELAY = 6;   // 60ms a frame, a 2.2s seamless loop
-const CONFETTI_PALETTE = ['0D0F14', 'FFD740', '6C63FF', '00C853', 'FF5252', '40C4FF'];
-
-/** Paints a rotated rectangle into an index buffer. */
-function fillRotRect(buf, W, H, cx, cy, w, h, angle, color) {
-  const c = Math.cos(angle), s = Math.sin(angle);
-  const r = Math.hypot(w, h) / 2;
-  const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r));
-  const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-      if (Math.abs(dx * c + dy * s) <= w / 2 && Math.abs(-dx * s + dy * c) <= h / 2) buf[y * W + x] = color;
-    }
-  }
-}
-
-/**
- * Frames of confetti drifting down. Every motion — fall, sway, spin, flip —
- * completes a whole number of cycles over the loop, so the last frame runs
- * straight into the first without a jump.
- */
-function confettiFrames() {
-  const W = CONFETTI_W, H = CONFETTI_H, F = CONFETTI_FRAMES;
-  let seed = 20260927;   // fixed, so the same week exports the same deck
-  const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
-  const pieces = [];
-  for (let i = 0; i < 110; i++) {
-    pieces.push({
-      x: rnd() * W, phase: rnd(), laps: 1 + Math.floor(rnd() * 2),
-      sway: 12 + rnd() * 26, swayN: 1 + Math.floor(rnd() * 2), swayPh: rnd() * Math.PI * 2,
-      spinN: Math.floor(rnd() * 3) - 1, rot0: rnd() * Math.PI,
-      flipN: 1 + Math.floor(rnd() * 3), flipPh: rnd() * Math.PI * 2,
-      w: 7 + rnd() * 6, h: 11 + rnd() * 10, color: 1 + Math.floor(rnd() * 5),
-    });
-  }
-  const frames = [];
-  for (let f = 0; f < F; f++) {
-    const t = f / F;
-    const buf = new Uint8Array(W * H);
-    for (const p of pieces) {
-      const span = H + 40;
-      const y = ((p.phase + t * p.laps) % 1) * span - 20;
-      const x = p.x + p.sway * Math.sin(2 * Math.PI * p.swayN * t + p.swayPh);
-      const flip = Math.abs(Math.cos(2 * Math.PI * p.flipN * t + p.flipPh));
-      fillRotRect(buf, W, H, x, y, Math.max(1.5, p.w * flip), p.h, p.rot0 + 2 * Math.PI * p.spinN * t, p.color);
-    }
-    frames.push(buf);
-  }
-  return frames;
-}
-
-/** GIF89a with a global palette and a looping extension; every frame is a full canvas. */
-function encodeGif(W, H, palette, frames, delay) {
-  const out = [];
-  const u16 = n => out.push(n & 255, (n >> 8) & 255);
-  const str = s => { for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); };
-  const tableBits = 3;   // 8 slots: room for the six colours
-  str('GIF89a'); u16(W); u16(H); out.push(0x80 | (7 << 4) | (tableBits - 1), 0, 0);
-  for (let i = 0; i < (1 << tableBits); i++) {
-    const hex = palette[i] || '000000';
-    out.push(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16));
-  }
-  out.push(0x21, 0xFF, 0x0B); str('NETSCAPE2.0'); out.push(3, 1, 0, 0, 0);   // loop forever
-  for (const frame of frames) {
-    out.push(0x21, 0xF9, 4, 0); u16(delay); out.push(0, 0);
-    out.push(0x2C); u16(0); u16(0); u16(W); u16(H); out.push(0);
-    out.push(tableBits);
-    lzwPack(out, frame, tableBits);
-  }
-  out.push(0x3B);
-  return Uint8Array.from(out);
-}
-
-/** GIF's LZW variant, packed LSB-first into 255-byte sub-blocks. */
-function lzwPack(out, pixels, minCode) {
-  const CLEAR = 1 << minCode, EOI = CLEAR + 1;
-  let codeSize = minCode + 1, next = EOI + 1;
-  let dict = new Map();
-  let acc = 0, bits = 0;
-  const block = [];
-  const flushBlock = () => { if (block.length) { out.push(block.length, ...block); block.length = 0; } };
-  const emit = code => {
-    acc |= code << bits; bits += codeSize;
-    while (bits >= 8) {
-      block.push(acc & 255); acc >>>= 8; bits -= 8;
-      if (block.length === 255) flushBlock();
-    }
-  };
-  emit(CLEAR);
-  let prefix = pixels[0];
-  for (let i = 1; i < pixels.length; i++) {
-    const px = pixels[i];
-    const key = (prefix << 8) | px;
-    const found = dict.get(key);
-    if (found !== undefined) { prefix = found; continue; }
-    emit(prefix);
-    if (next < 4096) {
-      dict.set(key, next++);
-      if (next - 1 === (1 << codeSize) && codeSize < 12) codeSize++;
-    } else {
-      emit(CLEAR); dict = new Map(); codeSize = minCode + 1; next = EOI + 1;
-    }
-    prefix = px;
-  }
-  emit(prefix); emit(EOI);
-  if (bits > 0) { block.push(acc & 255); if (block.length === 255) flushBlock(); }
-  flushBlock();
-  out.push(0);
-}
-
-const confettiGif = () => encodeGif(CONFETTI_W, CONFETTI_H, CONFETTI_PALETTE, confettiFrames(), CONFETTI_DELAY);
-
 
 /**
  * Normalises a kid's photo to a centred square JPEG. Phone photos are large and
- * may be portrait or video; this keeps the deck small and the faces centred.
+ * may be portrait or video; this keeps the ceremony file small and the faces centred.
  */
 async function photoForSlide(kid, size = 900) {
   if (!kid.media) return null;
@@ -2720,336 +2348,6 @@ async function photoForSlide(kid, size = 900) {
   }
 }
 
-/** The opening slide, shared with the launcher so the two look the same. */
-function titleSlideShapes(when) {
-  const GOLD = 'FFD740', TEXT = 'E8EAF6', DIM = '8A8D9E';
-  return [
-    pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
-    pptText({ x: 0, y: inEmu(1.8), w: DECK_W, h: inEmu(2.2), lines: '🏆', size: 150, color: GOLD }),
-    pptText({ x: 0, y: inEmu(4.2), w: DECK_W, h: inEmu(1.8), lines: 'Best Worshiper', size: 96, color: GOLD, bold: true }),
-    pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.0), lines: when, size: 40, color: DIM }),
-    pptText({ x: 0, y: inEmu(7.6), w: DECK_W, h: inEmu(1.2), lines: meetTodayLine(), size: 40, color: TEXT }),
-  ];
-}
-
-/**
- * The grid slides, mirroring the screen ceremony: the nominees in colour, then
- * per winner a slide with everyone greyed and "1 / 6" on top, a run of slides
- * that advance by themselves while faces are enlarged in turn (the roulette),
- * and the landing slide with the winner in colour and enlarged. Winners stay in
- * colour, a little larger, on every later slide.
- */
-async function pushGridSlides(slides, kids, winners, addPhoto) {
-  const GOLD = 'FFD740', ACCENT = '6C63FF', TEXT = 'E8EAF6', DIM = '8A8D9E', SHADE = '3A3D4A';
-  const top = inEmu(2.3), areaW = DECK_W - inEmu(1.6), areaH = DECK_H - top - inEmu(0.5);
-  const { cols, rows, cellW, cellH, face } = faceGrid(kids.length, areaW, areaH, 0.32, inEmu(3.4));
-  const nameSize = Math.max(14, Math.min(40, Math.round(face / EMU_PER_INCH * 18)));
-  const offX = (DECK_W - cellW * cols) / 2;
-  const offY = top + (areaH - cellH * rows) / 2;
-
-  // Where each face sits (its centre), and its photo in colour and in grey.
-  const place = new Map();
-  for (let i = 0; i < kids.length; i++) {
-    const kid = kids[i];
-    const r = Math.floor(i / cols);
-    // Centre a short last row instead of leaving it hanging left.
-    const inRow = r === rows - 1 ? kids.length - r * cols : cols;
-    const jpeg = await photoForSlide(kid, 400);
-    place.set(kid.id, {
-      kid,
-      cx: offX + (cols - inRow) * cellW / 2 + (i % cols) * cellW + cellW / 2,
-      cy: offY + r * cellH + face / 2,
-      color: jpeg ? addPhoto(jpeg) : null,
-      grey: jpeg ? addPhoto(await greyJpeg(jpeg)) : null,
-    });
-  }
-
-  // How each look draws a face: size, ring, photo and name colour.
-  const LOOKS = {
-    color: { scale: 1,    ring: GOLD,   photo: 'color', name: TEXT },
-    grey:  { scale: 1,    ring: SHADE,  photo: 'grey',  name: DIM },
-    spot:  { scale: 1.35, ring: ACCENT, photo: 'grey',  name: TEXT },
-    won:   { scale: 1.15, ring: GOLD,   photo: 'color', name: GOLD },
-    land:  { scale: 1.7,  ring: GOLD,   photo: 'color', name: GOLD },
-  };
-  const ORDER = ['color', 'grey', 'won', 'spot', 'land'];   // bigger faces drawn over their neighbours
-
-  const gridSlide = (title, lookOf, extra = {}) => {
-    const shapes = [
-      pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: '0D0F14' }),
-      pptText({ x: 0, y: inEmu(0.8), w: DECK_W, h: inEmu(1.2), lines: title, size: 54, color: ACCENT, bold: true }),
-    ];
-    const images = [];
-    const rIdOf = name => {
-      let img = images.find(i => i.name === name);
-      if (!img) { img = { rId: `rId${10 + images.length}`, name }; images.push(img); }
-      return img.rId;
-    };
-    const ids = [...place.keys()].sort((a, b) => ORDER.indexOf(lookOf(a)) - ORDER.indexOf(lookOf(b)));
-    for (const id of ids) {
-      const p = place.get(id), look = LOOKS[lookOf(id)];
-      const size = Math.round(face * look.scale), ring = Math.round(size * 0.04);
-      const nameH = Math.round(size * 0.3);
-      // Keep an enlarged face, ring and name on the slide.
-      const x = Math.round(Math.min(Math.max(p.cx - size / 2, ring + inEmu(0.1)), DECK_W - size - ring - inEmu(0.1)));
-      const y = Math.round(Math.min(Math.max(p.cy - size / 2, inEmu(2.0) + ring), DECK_H - size - ring - nameH));
-      shapes.push(pptShape({ x: x - ring, y: y - ring, w: size + ring * 2, h: size + ring * 2, fill: look.ring, geom: 'ellipse' }));
-      const photo = p[look.photo];
-      if (photo) {
-        shapes.push(pptPicture({ x, y, w: size, h: size, rId: rIdOf(photo) }));
-      } else {
-        shapes.push(pptShape({ x, y, w: size, h: size, fill: '1C1F2A', geom: 'ellipse' }));
-        shapes.push(pptText({ x, y, w: size, h: size, lines: '🧒', size: Math.round(size / EMU_PER_INCH * 40), color: TEXT }));
-      }
-      const nameW = Math.round(cellW * look.scale);
-      shapes.push(pptText({ x: Math.round(x + size / 2 - nameW / 2), y: y + size + ring, w: nameW, h: nameH,
-        lines: p.kid.name, size: Math.round(nameSize * look.scale), color: look.name, bold: true }));
-    }
-    slides.push({ xml: shapes, images, ...extra });
-  };
-
-  gridSlide(`Today's Nominees · ${kids.length}`, () => 'color', { audio: 'drumroll' });
-
-  for (let i = 0; i < winners.length; i++) {
-    const title = `Best Worshiper  ${i + 1} / ${winners.length}`;
-    const won = new Set(winners.slice(0, i).map(k => k.id));
-    const base = id => won.has(id) ? 'won' : 'grey';
-    gridSlide(title, base);
-
-    const eligible = [...place.keys()].filter(id => !won.has(id));
-    const seq = spinSequence(eligible, winners[i].id);
-    seq.forEach((step, n) => gridSlide(title, id => id === step.id ? 'spot' : base(id), {
-      advanceMs: step.ms,
-      // One drumroll from the first roulette slide, carried across the rest of them.
-      ...(n === 0 ? { audio: 'drumroll', audioSlides: seq.length } : {}),
-    }));
-    gridSlide(title, id => id === winners[i].id ? 'land' : base(id), { audio: 'fanfare', confetti: true });
-  }
-}
-
-/** The same photo in dim grey, for the faces still waiting to be revealed. */
-async function greyJpeg(jpeg) {
-  const bmp = await createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' }));
-  const canvas = document.createElement('canvas');
-  canvas.width = bmp.width; canvas.height = bmp.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bmp, 0, 0);
-  const img = ctx.getImageData(0, 0, canvas.width, canvas.height), d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const v = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) * 0.5;
-    d[i] = d[i + 1] = d[i + 2] = v;
-  }
-  ctx.putImageData(img, 0, 0);
-  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-  return new Uint8Array(await blob.arrayBuffer());
-}
-
-async function buildAwardPptx() {
-  const saved = savedWeek();
-  const winners = saved.winnerIds.map(id => kidById(id));
-  const nominees = saved.candidateIds.map(id => kidById(id)).filter(Boolean);
-  const when = state.currentWeekDate;
-
-  const photos = [];   // {name, data}
-  const slides = [];   // {xml, images: [{rId, name}], audio, confetti} — audio names a PPTX_SOUNDS entry
-  const addPhoto = data => {
-    const name = `image${photos.length + 1}.jpeg`;
-    photos.push({ name, data });
-    return name;
-  };
-
-  const BG = '0D0F14', GOLD = 'FFD740', ACCENT = '6C63FF', TEXT = 'E8EAF6', DIM = '8A8D9E';
-  const bg = () => pptShape({ x: 0, y: 0, w: DECK_W, h: DECK_H, fill: BG });
-
-  // 1. Title
-  slides.push({ xml: titleSlideShapes(when) });
-
-  // 2. The nominee grid, and every reveal played on it
-  const gridKids = nominees.length ? withWinners(nominees, winners) : [];
-  if (gridKids.length) {
-    await pushGridSlides(slides, gridKids, winners, addPhoto);
-  }
-
-  // 3. Without a nominee list: a drumroll and a reveal for each winner
-  // 3. A drumroll and a reveal for each winner
-  for (let i = 0; i < winners.length && !gridKids.length; i++) {
-    const kid = winners[i];
-    const label = `Best Worshiper  ${i + 1} / ${winners.length}`;
-
-    slides.push({ xml: [
-      bg(),
-      pptText({ x: 0, y: inEmu(1.5), w: DECK_W, h: inEmu(1.2), lines: label, size: 52, color: ACCENT, bold: true }),
-      pptText({ x: 0, y: inEmu(3.4), w: DECK_W, h: inEmu(2.4), lines: '🥁', size: 170, color: TEXT }),
-      pptText({ x: 0, y: inEmu(6.2), w: DECK_W, h: inEmu(1.6), lines: 'Drumroll, please...', size: 96, color: GOLD, bold: true }),
-      pptText({ x: 0, y: inEmu(8.6), w: DECK_W, h: inEmu(1.0), lines: 'Who could it be?', size: 40, color: DIM }),
-    ], audio: 'drumroll' });
-
-    const jpeg = await photoForSlide(kid);
-    const box = inEmu(6), px = inEmu(2.2), py = inEmu(2.6);
-    const shapes = [
-      bg(),
-      pptText({ x: 0, y: inEmu(0.7), w: DECK_W, h: inEmu(0.9), lines: label, size: 34, color: DIM }),
-      pptShape({ x: px - inEmu(0.18), y: py - inEmu(0.18), w: box + inEmu(0.36), h: box + inEmu(0.36), fill: GOLD, geom: 'ellipse' }),
-    ];
-
-    const images = [];
-    if (jpeg) {
-      images.push({ rId: 'rId2', name: addPhoto(jpeg) });
-      shapes.push(pptPicture({ x: px, y: py, w: box, h: box, rId: 'rId2' }));
-    } else {
-      shapes.push(pptShape({ x: px, y: py, w: box, h: box, fill: '1C1F2A', geom: 'ellipse' }));
-      shapes.push(pptText({ x: px, y: py, w: box, h: box, lines: '🧒', size: 190, color: TEXT }));
-    }
-
-    const rx = px + box + inEmu(1.4);
-    const rw = DECK_W - rx - inEmu(1.2);
-    shapes.push(pptText({ x: rx, y: inEmu(3.6), w: rw, h: inEmu(1.2), lines: '🏆  Congratulations!', size: 48, color: GOLD, bold: true, align: 'l' }));
-    shapes.push(pptText({ x: rx, y: inEmu(5.0), w: rw, h: inEmu(2.2), lines: kid.name, size: 130, color: TEXT, bold: true, align: 'l' }));
-    slides.push({ xml: shapes, images, audio: 'fanfare', confetti: true });
-  }
-
-  // 4. Finale
-  const nameSize = winners.length <= 4 ? 80 : (winners.length <= 6 ? 64 : 48);
-  slides.push({ xml: [
-    bg(),
-    pptText({ x: 0, y: inEmu(1.2), w: DECK_W, h: inEmu(1.6), lines: 'Congratulations!', size: 84, color: GOLD, bold: true }),
-    pptText({ x: 0, y: inEmu(3.0), w: DECK_W, h: inEmu(1.0), lines: "Today's Best Worshipers", size: 40, color: DIM }),
-    pptText({ x: inEmu(1), y: inEmu(4.3), w: DECK_W - inEmu(2), h: inEmu(4.0), lines: winners.map(k => k.name), size: nameSize, color: TEXT, bold: true }),
-    pptText({ x: 0, y: inEmu(9.4), w: DECK_W, h: inEmu(1.0), lines: 'See you next week 🙌', size: 40, color: ACCENT }),
-  ], audio: 'fanfare', confetti: true });
-
-  return zipStore(pptxParts(slides, photos));
-}
-
-/** Assembles the OOXML package around the generated slides. */
-function pptxParts(slides, photos) {
-  const rel = (id, type, target) =>
-    `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
-  const RELS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"';
-
-  const files = [];
-
-  files.push({ name: '[Content_Types].xml', data: utf8(XML_HEAD +
-    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-    '<Default Extension="xml" ContentType="application/xml"/>' +
-    '<Default Extension="jpeg" ContentType="image/jpeg"/>' +
-    '<Default Extension="png" ContentType="image/png"/>' +
-    '<Default Extension="wav" ContentType="audio/x-wav"/>' +
-    '<Default Extension="gif" ContentType="image/gif"/>' +
-    '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' +
-    '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
-    '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
-    '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
-    slides.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('') +
-    '</Types>') });
-
-  files.push({ name: '_rels/.rels', data: utf8(XML_HEAD +
-    `<Relationships ${RELS}>` +
-    rel('rId1', 'officeDocument', 'ppt/presentation.xml') + '</Relationships>') });
-
-  const sldIds = slides.map((_, i) =>
-    `<p:sldId id="${256 + i}" r:id="rId${i + 2}"/>`).join('');
-  files.push({ name: 'ppt/presentation.xml', data: utf8(XML_HEAD +
-    `<p:presentation ${NS} saveSubsetFonts="1">` +
-    '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
-    `<p:sldIdLst>${sldIds}</p:sldIdLst>` +
-    `<p:sldSz cx="${DECK_W}" cy="${DECK_H}"/><p:notesSz cx="${DECK_H}" cy="${DECK_W}"/>` +
-    '</p:presentation>') });
-
-  files.push({ name: 'ppt/_rels/presentation.xml.rels', data: utf8(XML_HEAD +
-    `<Relationships ${RELS}>` +
-    rel('rId1', 'slideMaster', 'slideMasters/slideMaster1.xml') +
-    slides.map((_, i) => rel(`rId${i + 2}`, 'slide', `slides/slide${i + 1}.xml`)).join('') +
-    rel(`rId${slides.length + 2}`, 'theme', 'theme/theme1.xml') +
-    '</Relationships>') });
-
-  files.push({ name: 'ppt/slideMasters/slideMaster1.xml', data: utf8(XML_HEAD +
-    `<p:sldMaster ${NS}><p:cSld>` +
-    '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="0D0F14"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>' +
-    `<p:spTree>${emptyGroup()}</p:spTree></p:cSld>` +
-    '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' +
-    '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>' +
-    '<p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>') });
-
-  files.push({ name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: utf8(XML_HEAD +
-    `<Relationships ${RELS}>` +
-    rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') +
-    rel('rId2', 'theme', '../theme/theme1.xml') + '</Relationships>') });
-
-  files.push({ name: 'ppt/slideLayouts/slideLayout1.xml', data: utf8(XML_HEAD +
-    `<p:sldLayout ${NS} type="blank" preserve="1">` +
-    `<p:cSld name="Blank"><p:spTree>${emptyGroup()}</p:spTree></p:cSld>` +
-    '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>') });
-
-  files.push({ name: 'ppt/slideLayouts/_rels/slideLayout1.xml.rels', data: utf8(XML_HEAD +
-    `<Relationships ${RELS}>` +
-    rel('rId1', 'slideMaster', '../slideMasters/slideMaster1.xml') + '</Relationships>') });
-
-  files.push({ name: 'ppt/theme/theme1.xml', data: utf8(themeXml()) });
-
-  slides.forEach((s, i) => {
-    let timing = '';
-    if (s.audio) {
-      const { id, xml } = pptAudio(s.audio);
-      s.xml.push(xml);
-      timing = pptAutoplayTiming(id, PPTX_SOUNDS[s.audio].ms, s.audioSlides);
-    }
-    const sound = s.audio && PPTX_SOUNDS[s.audio].file;
-    // The confetti goes in right after the background so everything else sits on top.
-    if (s.confetti) s.xml.splice(1, 0, pptPicture({ x: 0, y: 0, w: DECK_W, h: DECK_H, rId: 'rId6', geom: 'rect' }));
-    files.push({ name: `ppt/slides/slide${i + 1}.xml`, data: utf8(slideXml(s.xml, timing, s.advanceMs)) });
-    files.push({ name: `ppt/slides/_rels/slide${i + 1}.xml.rels`, data: utf8(XML_HEAD +
-      `<Relationships ${RELS}>` +
-      rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') +
-      (s.images || []).map(img => rel(img.rId, 'image', `../media/${img.name}`)).join('') +
-      (sound
-        ? `<Relationship Id="rId3" Type="http://schemas.microsoft.com/office/2007/relationships/media" Target="../media/${sound}"/>` +
-          rel('rId4', 'audio', `../media/${sound}`) +
-          rel('rId5', 'image', '../media/poster.png')
-        : '') +
-      (s.confetti ? rel('rId6', 'image', '../media/confetti.gif') : '') +
-      '</Relationships>') });
-  });
-
-  photos.forEach(p => files.push({ name: `ppt/media/${p.name}`, data: p.data }));
-
-  // One copy of each sound, however many slides play it.
-  const sounds = new Set(slides.map(s => s.audio).filter(Boolean));
-  for (const key of sounds) {
-    files.push({ name: `ppt/media/${PPTX_SOUNDS[key].file}`, data: PPTX_SOUNDS[key].make() });
-  }
-  if (sounds.size) files.push({ name: 'ppt/media/poster.png', data: POSTER_PNG });
-  if (slides.some(s => s.confetti)) files.push({ name: 'ppt/media/confetti.gif', data: confettiGif() });
-  return files;
-}
-
-function themeXml() {
-  const fill = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
-  const line = '<a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln>';
-  const font = tag => `<a:${tag}><a:latin typeface="Segoe UI"/><a:ea typeface="Malgun Gothic"/><a:cs typeface=""/></a:${tag}>`;
-
-  return XML_HEAD +
-    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="bestWorshiper">' +
-    '<a:themeElements>' +
-    '<a:clrScheme name="bestWorshiper">' +
-    '<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>' +
-    '<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' +
-    '<a:dk2><a:srgbClr val="0D0F14"/></a:dk2><a:lt2><a:srgbClr val="E8EAF6"/></a:lt2>' +
-    '<a:accent1><a:srgbClr val="6C63FF"/></a:accent1><a:accent2><a:srgbClr val="FFD740"/></a:accent2>' +
-    '<a:accent3><a:srgbClr val="00C853"/></a:accent3><a:accent4><a:srgbClr val="FF5252"/></a:accent4>' +
-    '<a:accent5><a:srgbClr val="40C4FF"/></a:accent5><a:accent6><a:srgbClr val="B0BEC5"/></a:accent6>' +
-    '<a:hlink><a:srgbClr val="6C63FF"/></a:hlink><a:folHlink><a:srgbClr val="B0BEC5"/></a:folHlink>' +
-    '</a:clrScheme>' +
-    `<a:fontScheme name="bestWorshiper">${font('majorFont')}${font('minorFont')}</a:fontScheme>` +
-    '<a:fmtScheme name="bestWorshiper">' +
-    `<a:fillStyleLst>${fill}${fill}${fill}</a:fillStyleLst>` +
-    `<a:lnStyleLst>${line}${line}${line}</a:lnStyleLst>` +
-    '<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>' +
-    `<a:bgFillStyleLst>${fill}${fill}${fill}</a:bgFillStyleLst>` +
-    '</a:fmtScheme></a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>';
-}
-
 function base64FromBytes(bytes) {
   let binary = '';
   const chunk = 0x8000;
@@ -3072,55 +2370,100 @@ function saveBinaryToDevice(fileName, bytes, mimeType) {
   document.body.appendChild(a);
   a.click();
   // With "ask where to save each file" on, the browser reads the blob only
-  // after the save dialog closes. Revoking it here, as before, left a 0-byte
-  // .pptx on the PC — which PowerPoint opens as an empty deck. Keep the blob
-  // alive long enough for that dialog.
+  // after the save dialog closes; revoking it at once left a 0-byte file on
+  // the PC. Keep the blob alive long enough for that dialog.
   setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 120000);
-  showToast(`PPT saved: ${fileName} (${sizeLabel(bytes.length)})`);
+  showToast(`Saved: ${fileName} (${sizeLabel(bytes.length)})`);
 }
 
 function sizeLabel(n) {
   return n >= 1000000 ? (n / 1000000).toFixed(1) + ' MB' : n >= 1000 ? Math.round(n / 1000) + ' KB' : n + ' B';
 }
 
-const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const CEREMONY_MIME = 'text/html';
 
-/** One dated deck per week; it is opened on its own at church. */
+/** One dated ceremony file per week; it is opened on its own at church. */
 const awardStamp = () => state.currentWeekDate.replace(/-/g, '');
-const awardFileName = () => `BestWorshiper_${awardStamp()}.pptx`;
+const ceremonyFileName = () => `BestWorshiper_${awardStamp()}.html`;
 
-async function exportAwardPptx() {
+async function exportCeremonyFile() {
   const saved = savedWeek();
   if (!saved || saved.winnerIds.length === 0) {
     showToast('Choose and save this week\'s Best Worshipers first.');
     return;
   }
-  const btn = document.getElementById('pptx-btn');
+  const btn = document.getElementById('ceremony-file-btn');
+  const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Building...';
   try {
-    const bytes = await buildAwardPptx();
-    // The deck is dated, and so is the link slide that opens it: the service
-    // deck's link goes by name, so a fresh link slide goes out with every deck,
-    // to be pasted in as the service deck's last slide.
+    const bytes = await buildCeremonyFile(saved);
     const sub = deckSubfolder();
-    const files = [{ fileName: awardFileName(), bytes }];
+    const files = [{ fileName: ceremonyFileName(), bytes }];
 
     if (!IS_ANDROID_APP) {
-      files.forEach(f => saveBinaryToDevice(f.fileName, f.bytes, PPTX_MIME));
+      files.forEach(f => saveBinaryToDevice(f.fileName, f.bytes, CEREMONY_MIME));
       return;
     }
 
-    // On the phone the deck can go several places; ask each time, since the
+    // On the phone the file can go several places; ask each time, since the
     // USB drive is only plugged in on the way to church.
     openExportChooser(files.map(f => ({ fileName: f.fileName, b64: base64FromBytes(f.bytes) })), sub);
   } catch (e) {
     console.error(e);
-    showToast('PPT export failed: ' + e.message);
+    showToast('Ceremony file export failed: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '📊 Export PPT';
+    btn.textContent = label;
   }
+}
+
+/**
+ * This page as it was loaded, before any script touched it, plus the week's
+ * nominees and winners with their photos as small JPEG data URLs.
+ */
+async function buildCeremonyFile(saved) {
+  const nominees = saved.candidateIds || [];
+  const kids = [];
+  for (const id of new Set([...nominees, ...saved.winnerIds])) {
+    const kid = kidById(id);
+    const jpeg = await photoForSlide(kid, 480);
+    kids.push({ id, name: kid.name, photo: jpeg ? 'data:image/jpeg;base64,' + base64FromBytes(jpeg) : null });
+  }
+  const data = { date: state.currentWeekDate, nominees, winners: saved.winnerIds, kids };
+  // "<" escaped so a name can never close the script tag early.
+  const json = JSON.stringify(data).replace(/</g, '\\u003c');
+  // The icons and manifest sit next to the app, not next to the file, so leave them out.
+  const page = APP_SOURCE.replace(/<link rel="(manifest|icon|apple-touch-icon)"[^>]*>\n?/g, '');
+  const at = page.indexOf('<script>');
+  return new TextEncoder().encode(
+    page.slice(0, at) + `<script>window.CEREMONY_FILE = ${json};<\/script>\n` + page.slice(at));
+}
+
+/** Runs inside an exported ceremony file: the ceremony only, full screen on the first key. */
+function startCeremonyFile(data) {
+  document.body.classList.add('ceremony-file');
+  document.title = `Best Worshiper · ${data.date}`;
+  const blobOf = url => {
+    const bin = atob(url.slice(url.indexOf(',') + 1));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'image/jpeg' });
+  };
+  state.kids = data.kids.map(k => ({
+    id: k.id, name: k.name, active: true,
+    media: k.photo ? blobOf(k.photo) : null, mediaType: k.photo ? 'image' : null,
+  }));
+  state.currentWeekDate = data.date;
+  state.weeks = [{ date: data.date, candidateIds: data.nominees, winnerIds: data.winners }];
+  const goFull = () => {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
+  document.addEventListener('keydown', goFull, true);
+  document.addEventListener('click', goFull, true);
+  openCeremony();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3183,7 +2526,6 @@ function withWinners(nominees, winners) {
  * down to a stop on the winner. Faces are picked at random from those not yet
  * revealed, never the same one twice running, and the face just before the
  * landing is never the winner's, or the roulette would seem to stop early.
- * Shared by the screen and the deck so both play the same way.
  */
 const SPIN_DELAYS = [110, 110, 120, 130, 140, 155, 170, 190, 215, 245, 280, 325, 380, 450, 540, 650];
 function spinSequence(eligibleIds, winnerId) {
@@ -3200,6 +2542,8 @@ function spinSequence(eligibleIds, winnerId) {
 }
 
 function closeCeremony() {
+  // An exported ceremony file has nothing behind the ceremony to go back to.
+  if (window.CEREMONY_FILE) return;
   stopRoulette();
   stopDrum();
   document.getElementById('ceremony').classList.add('hidden');
@@ -3574,27 +2918,27 @@ document.getElementById('script-save-btn').addEventListener('click', saveScript)
 document.getElementById('script-reset-btn').addEventListener('click', resetScript);
 
 document.getElementById('ceremony-btn').addEventListener('click', openCeremony);
-document.getElementById('pptx-btn').addEventListener('click', exportAwardPptx);
+document.getElementById('ceremony-file-btn').addEventListener('click', exportCeremonyFile);
 document.getElementById('export-modal-close').addEventListener('click', closeExportChooser);
 document.getElementById('export-phone-btn').addEventListener('click', () => {
   closeExportChooser();
-  exportFilesWith((n, b) => window.AndroidBridge.saveToPhone(n, b, PPTX_MIME, pendingExport.sub), 'Download/bestWorshiper');
+  exportFilesWith((n, b) => window.AndroidBridge.saveToPhone(n, b, CEREMONY_MIME, pendingExport.sub), 'Download/bestWorshiper');
 });
 document.getElementById('export-usb-btn').addEventListener('click', () => {
   closeExportChooser();
-  exportFilesWith((n, b) => window.AndroidBridge.exportToUsb(n, b, PPTX_MIME, pendingExport.sub), 'USB');
+  exportFilesWith((n, b) => window.AndroidBridge.exportToUsb(n, b, CEREMONY_MIME, pendingExport.sub), 'USB');
 });
 document.getElementById('export-dest-btn').addEventListener('click', () => {
   closeExportChooser();
   let where = 'the chosen folder';
   try { where = window.AndroidBridge.destinationName() || where; } catch (e) {}
-  exportFilesWith((n, b) => window.AndroidBridge.saveToDestination(n, b, PPTX_MIME, pendingExport.sub), where);
+  exportFilesWith((n, b) => window.AndroidBridge.saveToDestination(n, b, CEREMONY_MIME, pendingExport.sub), where);
 });
 document.getElementById('export-share-btn').addEventListener('click', () => {
   closeExportChooser();
-  // The share sheet takes one file at a time; the deck is the one that matters.
-  const deck = pendingExport.files[0];
-  window.AndroidBridge.shareFile(deck.fileName, deck.b64, PPTX_MIME);
+  // The share sheet takes one file at a time.
+  const file = pendingExport.files[0];
+  window.AndroidBridge.shareFile(file.fileName, file.b64, CEREMONY_MIME);
 });
 document.getElementById('destination-folder-btn').addEventListener('click', () => {
   if (IS_ANDROID_APP && window.AndroidBridge.pickDestinationFolder) window.AndroidBridge.pickDestinationFolder();
@@ -3716,6 +3060,7 @@ document.addEventListener('change', e => {
 const IS_ANDROID_APP = !!(window.AndroidBridge && window.AndroidBridge.saveFile);
 
 (async function init() {
+  if (window.CEREMONY_FILE) { startCeremonyFile(window.CEREMONY_FILE); return; }
   document.getElementById('app-version-label').textContent = 'v' + APP_VERSION;
   document.getElementById('settings-version-label').textContent = APP_VERSION;
 
@@ -3735,7 +3080,7 @@ const IS_ANDROID_APP = !!(window.AndroidBridge && window.AndroidBridge.saveFile)
 })();
 
 // The Android build already ships its assets locally, so it needs no cache layer.
-if ('serviceWorker' in navigator && window.isSecureContext && !IS_ANDROID_APP) {
+if ('serviceWorker' in navigator && window.isSecureContext && !IS_ANDROID_APP && !window.CEREMONY_FILE) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
   });
