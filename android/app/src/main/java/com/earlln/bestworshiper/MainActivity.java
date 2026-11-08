@@ -426,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         /**
-         * Starts a Downloads file the page writes piece by piece. A backup carries
+         * Starts a file under Download/bestWorshiper the page writes piece by piece. A backup carries
          * every photo and video, and handing it over as one base64 string runs the
          * WebView out of string length long before the phone runs out of space.
          * Returns a handle for appendText/finishFile, or "" if the file can't be made.
@@ -441,6 +441,7 @@ public class MainActivity extends AppCompatActivity {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
                     values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                    values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + PHONE_DIR + "/");
                     values.put(MediaStore.Downloads.IS_PENDING, 1);
                     pf.uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                     if (pf.uri == null) throw new IllegalStateException("insert failed");
@@ -448,7 +449,7 @@ public class MainActivity extends AppCompatActivity {
                     if (out == null) throw new IllegalStateException("stream failed");
                     pf.out = new BufferedOutputStream(out, 1 << 16);
                 } else {
-                    File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), PHONE_DIR);
                     if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("mkdir failed");
                     pf.file = new File(dir, fileName);
                     pf.out = new BufferedOutputStream(new FileOutputStream(pf.file), 1 << 16);
@@ -479,7 +480,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        /** Closes a file from beginFile and makes it visible in Downloads. */
+        /** Closes a file from beginFile and makes it visible in Download/bestWorshiper. */
         @JavascriptInterface
         public boolean finishFile(String id) {
             PendingFile pf = pendingFiles.remove(id);
@@ -498,7 +499,7 @@ public class MainActivity extends AppCompatActivity {
                                 pf.file.getAbsolutePath(), pf.file.length(), true);
                     }
                 }
-                toast("다운로드 폴더에 저장되었습니다: " + pf.name);
+                toast("Download/" + PHONE_DIR + " 에 저장되었습니다: " + pf.name);
                 return true;
             } catch (Exception e) {
                 discard(pf);

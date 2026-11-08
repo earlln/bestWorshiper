@@ -751,7 +751,8 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
       </div>
       <div class="card">
         <h3>Backup</h3>
-        <p class="hint" style="margin-bottom:10px">Save or restore everything, photos and videos included.</p>
+        <p class="hint" style="margin-bottom:10px">Save or restore everything, photos and videos included.
+        In the Android app the backup is saved under Download/bestWorshiper.</p>
         <div class="row-actions">
           <button id="export-btn" class="btn">⬇ Export (JSON)</button>
           <label class="btn file-btn">⬆ Import (JSON)<input type="file" id="import-input" accept="application/json" hidden></label>
@@ -2152,7 +2153,7 @@ async function exportData() {
 }
 
 /**
- * Where the backup pieces go: straight into a Downloads file inside the Android
+ * Where the backup pieces go: straight into a Download/bestWorshiper file inside the Android
  * app, or into a Blob the browser downloads at the end.
  */
 function openBackupWriter(fileName) {
