@@ -352,6 +352,11 @@ select:focus { outline: none; border-color: var(--accent); }
 }
 .modal-box label { display: block; font-size: 12px; color: var(--text-dim); margin: 12px 0 6px; }
 .modal-box input[type="text"], .modal-box input[type="file"] { width: 100%; }
+.modal-box textarea {
+  width: 100%; resize: vertical; font: inherit; font-size: 14px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 8px 10px;
+}
 .modal-title { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 700; }
 .modal-close { background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; }
 .media-preview { margin-top: 10px; width: 100%; max-height: 200px; border-radius: 8px; overflow: hidden; background: var(--surface2); display: flex; align-items: center; justify-content: center; min-height: 60px; }
@@ -606,7 +611,8 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
         </select>
         <input type="text" id="kids-search" placeholder="Search name (optional)">
         <label class="chk-inline"><input type="checkbox" id="kids-show-inactive"> Include inactive</label>
-        <button id="kids-text-btn" class="btn" title="One child per line: name, English name, birthday — in the order shown">⬇ Names .txt</button>
+        <button id="kids-text-btn" class="btn" title="One child per line: Korean name, English name — in the order shown">⬇ Names .txt</button>
+        <button id="kids-details-btn" class="btn" title="Names, birthday, memo and more for each child, as readable text">⬇ Details .txt</button>
         <button id="kid-add-btn" class="btn accent">+ Add child</button>
       </div>
     </div>
@@ -630,10 +636,15 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
 <div id="kid-modal" class="modal hidden">
   <div class="modal-box">
     <div class="modal-title"><span id="kid-modal-title">Add child</span><button class="modal-close" id="kid-modal-close">✕</button></div>
-    <label>Name</label>
-    <input type="text" id="kid-name-input" placeholder="Name">
+    <label>Korean name</label>
+    <input type="text" id="kid-name-input" placeholder="한글 이름">
     <label>English name</label>
-    <input type="text" id="kid-english-input" placeholder="English name (optional)">
+    <input type="text" id="kid-english-input" placeholder="English name">
+    <label>Main name <span class="hint">(shown everywhere else, ceremony included)</span></label>
+    <div class="row-actions" style="gap:16px">
+      <label class="chk-inline"><input type="radio" name="kid-main-name" value="korean" checked> Korean</label>
+      <label class="chk-inline"><input type="radio" name="kid-main-name" value="english"> English</label>
+    </div>
     <label>Birthday</label>
     <input type="date" id="kid-birthday-input">
     <label>Photo / Video</label>
@@ -650,6 +661,8 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
     </div>
     <div id="kid-media-preview" class="media-preview">🧒</div>
     <button id="kid-media-remove" class="btn small hidden" style="margin-top:8px">Remove media</button>
+    <label>Memo</label>
+    <textarea id="kid-memo-input" rows="3" placeholder="Notes (optional)"></textarea>
     <label class="chk-inline hidden" id="kid-active-row" style="margin-top:14px"><input type="checkbox" id="kid-active-input"> Active (can be nominated)</label>
     <div class="modal-actions">
       <button id="kid-cancel-btn" class="btn">Cancel</button>
@@ -808,7 +821,7 @@ const APP_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.10.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -919,7 +932,7 @@ function todayStr() {
 }
 
 async function loadAll() {
-  state.kids = await dbGetAll('kids');
+  state.kids = (await dbGetAll('kids')).map(withNames);
   state.weeks = await dbGetAll('weeks');
   state.points = await dbGetAll('points');
   const s = await dbGetAll('settings');
@@ -1027,6 +1040,27 @@ function computeScore(kidId, asOfDate, liveCandidateIds) {
     recentOf,
     total: round1(manual + pen.penalty + bonus),
   };
+}
+
+/**
+ * A child's names. `name` is always the main name, the one the rest of the app
+ * shows; koreanName and englishName are kept apart, and mainName says which of
+ * them `name` is. Records saved before these fields existed hold a Korean name.
+ */
+function withNames(k) {
+  const mainName = k.mainName === 'english' ? 'english' : 'korean';
+  const koreanName = k.koreanName ?? (mainName === 'english' ? '' : k.name);
+  return { ...k, mainName, koreanName, englishName: k.englishName || '' };
+}
+
+/** The name that is not the main one, if the child has it. */
+function otherName(k) {
+  return k.mainName === 'english' ? k.koreanName : k.englishName;
+}
+
+/** Search matches either name. */
+function kidMatches(k, search) {
+  return !search || [k.name, k.koreanName, k.englishName].some(n => (n || '').toLowerCase().includes(search));
 }
 
 function kidById(id) {
@@ -1234,7 +1268,7 @@ function renderCandidatePicker() {
   const kids = sortKids(
     state.kids
       .filter(k => k.active)
-      .filter(k => !search || k.name.toLowerCase().includes(search)),
+      .filter(k => kidMatches(k, search)),
     state.candidateSortMode
   );
 
@@ -1287,7 +1321,7 @@ function selectAllCandidates(select) {
   const search = (document.getElementById('candidate-search').value || '').trim().toLowerCase();
   const visible = state.kids
     .filter(k => k.active)
-    .filter(k => !search || k.name.toLowerCase().includes(search));
+    .filter(k => kidMatches(k, search));
   visible.forEach(k => {
     if (select) state.candidateIds.add(k.id);
     else { state.candidateIds.delete(k.id); state.winnerIds.delete(k.id); }
@@ -1519,7 +1553,7 @@ function renderKidsTab() {
   const kids = sortKids(
     state.kids
       .filter(k => showInactive || k.active)
-      .filter(k => !search || k.name.toLowerCase().includes(search) || (k.englishName || '').toLowerCase().includes(search)),
+      .filter(k => kidMatches(k, search)),
     state.kidsSortMode
   );
 
@@ -1536,7 +1570,7 @@ function renderKidsTab() {
       ${k.active ? '' : '<div class="kid-card-flag">inactive</div>'}
       ${isPriority ? `<div class="kid-card-order">${i + 1}</div>` : ''}
       ${mediaThumbHTML(k, 'kid-card-media')}
-      <div class="kid-card-name">${escapeHtml(k.name)}${k.englishName ? ` <span class="kid-card-en">(${escapeHtml(k.englishName)})</span>` : ''}</div>
+      <div class="kid-card-name">${escapeHtml(k.name)}${otherName(k) ? ` <span class="kid-card-en">(${escapeHtml(otherName(k))})</span>` : ''}${k.memo ? ' <span class="kid-card-memo" title="Has a memo">📝</span>' : ''}</div>
       ${k.birthday ? `<div class="kid-card-bday">🎂 ${birthdayLabel(k.birthday)}${bdayNow ? ' · this month' : ''}</div>` : ''}
       <div class="kid-card-score">total ${fmtScore(score.total)}</div>
       <div class="kid-card-actions">
@@ -1564,8 +1598,10 @@ function openKidModal(kidId) {
   if (kidId) {
     const k = kidById(kidId);
     title.textContent = 'Edit child';
-    nameInput.value = k.name;
-    document.getElementById('kid-english-input').value = k.englishName || '';
+    nameInput.value = k.koreanName;
+    document.getElementById('kid-english-input').value = k.englishName;
+    setMainNameChoice(k.mainName);
+    document.getElementById('kid-memo-input').value = k.memo || '';
     document.getElementById('kid-birthday-input').value = k.birthday || '';
     activeRow.classList.remove('hidden');
     activeInput.checked = k.active;
@@ -1582,6 +1618,8 @@ function openKidModal(kidId) {
     title.textContent = 'Add child';
     nameInput.value = '';
     document.getElementById('kid-english-input').value = '';
+    setMainNameChoice('korean');
+    document.getElementById('kid-memo-input').value = '';
     document.getElementById('kid-birthday-input').value = '';
     activeRow.classList.add('hidden');
     activeInput.checked = true;
@@ -1589,6 +1627,10 @@ function openKidModal(kidId) {
     preview.innerHTML = '🧒';
   }
   document.getElementById('kid-modal').classList.remove('hidden');
+}
+
+function setMainNameChoice(which) {
+  document.querySelectorAll('input[name="kid-main-name"]').forEach(r => { r.checked = r.value === which; });
 }
 
 function closeKidModal() {
@@ -1621,21 +1663,24 @@ function handleKidMediaRemove() {
 }
 
 async function saveKid() {
-  const name = document.getElementById('kid-name-input').value.trim();
-  if (!name) { showToast('Enter a name.'); return; }
-  const active = document.getElementById('kid-active-input').checked;
+  const koreanName = document.getElementById('kid-name-input').value.trim();
   const englishName = document.getElementById('kid-english-input').value.trim();
+  const mainName = document.querySelector('input[name="kid-main-name"]:checked').value;
+  const name = mainName === 'english' ? englishName : koreanName;
+  if (!name) { showToast(mainName === 'english' ? 'Enter the English name (main name).' : 'Enter the Korean name (main name).'); return; }
+  const memo = document.getElementById('kid-memo-input').value.trim();
+  const active = document.getElementById('kid-active-input').checked;
   const birthday = document.getElementById('kid-birthday-input').value;   // YYYY-MM-DD, or '' when not given
 
   if (state.editingKidId) {
     const k = kidById(state.editingKidId);
-    const rec = { id: k.id, name, englishName, birthday, active, media: k.media, mediaType: k.mediaType, sortOrder: getSortOrder(k), createdAt: k.createdAt };
+    const rec = { id: k.id, name, koreanName, englishName, mainName, birthday, memo, active, media: k.media, mediaType: k.mediaType, sortOrder: getSortOrder(k), createdAt: k.createdAt };
     if (state.kidMediaFile === null) { rec.media = null; rec.mediaType = null; }
     else if (state.kidMediaFile instanceof File) { rec.media = state.kidMediaFile; rec.mediaType = state.kidMediaFile.type.startsWith('video/') ? 'video' : 'image'; }
     await dbPut('kids', rec);
   } else {
     const maxOrder = state.kids.reduce((m, k) => Math.max(m, getSortOrder(k)), -1);
-    const rec = { name, englishName, birthday, active: true, media: null, mediaType: null, sortOrder: maxOrder + 1, createdAt: Date.now() };
+    const rec = { name, koreanName, englishName, mainName, birthday, memo, active: true, media: null, mediaType: null, sortOrder: maxOrder + 1, createdAt: Date.now() };
     if (state.kidMediaFile instanceof File) { rec.media = state.kidMediaFile; rec.mediaType = state.kidMediaFile.type.startsWith('video/') ? 'video' : 'image'; }
     await dbAdd('kids', rec);
   }
@@ -1896,7 +1941,9 @@ async function applyHistoryText(text, starlessMeansWinners) {
   }
 
   const allNames = [...new Set(weeks.flatMap(w => w.candidates))];
-  const known = new Map(state.kids.map(k => [k.name, k.id]));
+  // A line may use either of a child's names; the main name wins a clash.
+  const known = new Map(state.kids.flatMap(k => [[k.koreanName, k.id], [k.englishName, k.id]]).filter(([n]) => n));
+  state.kids.forEach(k => known.set(k.name, k.id));
   const newNames = allNames.filter(n => !known.has(n));
 
   const totalWinners = weeks.reduce((s, w) => s + w.winners.length, 0);
@@ -1913,7 +1960,7 @@ async function applyHistoryText(text, starlessMeansWinners) {
   let order = state.kids.length;
   for (const name of newNames) {
     const id = await dbAdd('kids', {
-      name, active: true, media: null, mediaType: null,
+      name, koreanName: name, englishName: '', mainName: 'korean', active: true, media: null, mediaType: null,
       sortOrder: order++, createdAt: Date.now(),
     });
     known.set(name, id);
@@ -1955,17 +2002,45 @@ async function copyHistoryText() {
     showToast('Copied to clipboard.');
   }
 }
-/**
- * The roster as plain text, one child per line ("name, English name, birthday"),
- * sorted and filtered as the Kids tab shows it (search aside).
- */
-function downloadKidsText() {
+/** The children the Kids tab lists, in its order, search aside. */
+function kidsForText() {
   const showInactive = document.getElementById('kids-show-inactive').checked;
-  const kids = sortKids(state.kids.filter(k => showInactive || k.active), state.kidsSortMode);
+  return sortKids(state.kids.filter(k => showInactive || k.active), state.kidsSortMode);
+}
+
+/** The roster as plain text, one child per line: "Korean name, English name". */
+function downloadKidsText() {
+  const kids = kidsForText();
   if (kids.length === 0) { showToast('No children to save.'); return; }
   saveToDevice(
     `bestWorshiper_names_${todayStr()}.txt`,
-    kids.map(k => [k.name, k.englishName || '', k.birthday || ''].join(', ')).join('\n') + '\n',
+    kids.map(k => `${k.koreanName}, ${k.englishName}`).join('\n') + '\n',
+    'text/plain;charset=utf-8'
+  );
+}
+
+/** Everything about each child except the photo, laid out to be read rather than parsed. */
+function downloadKidsDetails() {
+  const kids = kidsForText();
+  if (kids.length === 0) { showToast('No children to save.'); return; }
+  const blocks = kids.map(k => {
+    const wins = state.weeks.filter(w => w.winnerIds.includes(k.id)).length;
+    const lines = [
+      `■ ${k.name}`,
+      `  Korean name : ${k.koreanName || '-'}`,
+      `  English name: ${k.englishName || '-'}`,
+      `  Main name   : ${k.mainName === 'english' ? 'English' : 'Korean'}`,
+      `  Birthday    : ${k.birthday || '-'}`,
+      `  Active      : ${k.active ? 'yes' : 'no'}`,
+      `  Chosen      : ${wins} time${wins === 1 ? '' : 's'}`,
+      `  Memo        : ${k.memo ? '' : '-'}`,
+      ...(k.memo ? k.memo.split('\n').map(l => '    ' + l) : []),
+    ];
+    return lines.join('\n');
+  });
+  saveToDevice(
+    `bestWorshiper_details_${todayStr()}.txt`,
+    `bestWorshiper — children (${kids.length}) · ${todayStr()}\n\n` + blocks.join('\n\n') + '\n',
     'text/plain;charset=utf-8'
   );
 }
@@ -2266,7 +2341,8 @@ async function importData(file) {
   const idMap = new Map();
   for (const k of (data.kids || [])) {
     const media = k.media ? await base64ToBlob(k.media) : null;
-    const newId = await dbAdd('kids', { name: k.name, englishName: k.englishName || '', birthday: k.birthday || '', active: k.active, media, mediaType: k.mediaType || null, sortOrder: k.sortOrder, createdAt: k.createdAt || Date.now() });
+    const n = withNames(k);
+    const newId = await dbAdd('kids', { name: k.name, koreanName: n.koreanName, englishName: n.englishName, mainName: n.mainName, birthday: k.birthday || '', memo: k.memo || '', active: k.active, media, mediaType: k.mediaType || null, sortOrder: k.sortOrder, createdAt: k.createdAt || Date.now() });
     idMap.set(k.id, newId);
   }
   for (const w of (data.weeks || [])) {
@@ -3007,6 +3083,7 @@ document.addEventListener('keydown', e => {
 
 document.getElementById('kids-search').addEventListener('input', renderKidsTab);
 document.getElementById('kids-text-btn').addEventListener('click', downloadKidsText);
+document.getElementById('kids-details-btn').addEventListener('click', downloadKidsDetails);
 document.getElementById('kids-sort-mode').addEventListener('change', e => {
   state.kidsSortMode = e.target.value;
   renderKidsTab();
