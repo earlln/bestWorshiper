@@ -602,6 +602,7 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
         </select>
         <input type="text" id="kids-search" placeholder="Search name (optional)">
         <label class="chk-inline"><input type="checkbox" id="kids-show-inactive"> Include inactive</label>
+        <button id="kids-text-btn" class="btn" title="One name per line, in the order shown">⬇ Names .txt</button>
         <button id="kid-add-btn" class="btn accent">+ Add child</button>
       </div>
     </div>
@@ -799,7 +800,7 @@ const APP_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.8.3';
+const APP_VERSION = '2.8.4';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1928,6 +1929,18 @@ async function copyHistoryText() {
     showToast('Copied to clipboard.');
   }
 }
+/** The roster as plain text, one name per line, sorted and filtered as the Kids tab shows it (search aside). */
+function downloadKidsText() {
+  const showInactive = document.getElementById('kids-show-inactive').checked;
+  const kids = sortKids(state.kids.filter(k => showInactive || k.active), state.kidsSortMode);
+  if (kids.length === 0) { showToast('No children to save.'); return; }
+  saveToDevice(
+    `bestWorshiper_names_${todayStr()}.txt`,
+    kids.map(k => k.name).join('\n') + '\n',
+    'text/plain;charset=utf-8'
+  );
+}
+
 function downloadHistoryText() {
   saveToDevice(
     `bestWorshiper_history_${todayStr()}.txt`,
@@ -2964,6 +2977,7 @@ document.addEventListener('keydown', e => {
 });
 
 document.getElementById('kids-search').addEventListener('input', renderKidsTab);
+document.getElementById('kids-text-btn').addEventListener('click', downloadKidsText);
 document.getElementById('kids-sort-mode').addEventListener('change', e => {
   state.kidsSortMode = e.target.value;
   renderKidsTab();
