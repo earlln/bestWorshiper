@@ -1519,7 +1519,7 @@ function renderKidsTab() {
   const kids = sortKids(
     state.kids
       .filter(k => showInactive || k.active)
-      .filter(k => !search || k.name.toLowerCase().includes(search)),
+      .filter(k => !search || k.name.toLowerCase().includes(search) || (k.englishName || '').toLowerCase().includes(search)),
     state.kidsSortMode
   );
 
