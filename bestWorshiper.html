@@ -205,6 +205,10 @@ table input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
 }
 .kid-card-media img, .kid-card-media video { width: 100%; height: 100%; object-fit: cover; }
 .kid-card-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; word-break: keep-all; }
+.kid-card-en { font-weight: 400; color: var(--text-dim); }
+.kid-card-bday { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+.kid-card.bday { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.kid-card.bday .kid-card-bday { color: var(--gold); font-weight: 600; }
 .kid-card-score { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .kid-card-actions { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 .kid-card-flag { position: absolute; top: 8px; left: 8px; font-size: 10px; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 6px; color: var(--text-dim); }
@@ -602,7 +606,7 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
         </select>
         <input type="text" id="kids-search" placeholder="Search name (optional)">
         <label class="chk-inline"><input type="checkbox" id="kids-show-inactive"> Include inactive</label>
-        <button id="kids-text-btn" class="btn" title="One name per line, in the order shown">⬇ Names .txt</button>
+        <button id="kids-text-btn" class="btn" title="One child per line: name, English name, birthday — in the order shown">⬇ Names .txt</button>
         <button id="kid-add-btn" class="btn accent">+ Add child</button>
       </div>
     </div>
@@ -628,6 +632,10 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
     <div class="modal-title"><span id="kid-modal-title">Add child</span><button class="modal-close" id="kid-modal-close">✕</button></div>
     <label>Name</label>
     <input type="text" id="kid-name-input" placeholder="Name">
+    <label>English name</label>
+    <input type="text" id="kid-english-input" placeholder="English name (optional)">
+    <label>Birthday</label>
+    <input type="date" id="kid-birthday-input">
     <label>Photo / Video</label>
     <div class="row-actions" style="gap:8px">
       <label class="btn file-btn">📷 Take photo
@@ -800,7 +808,7 @@ const APP_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.8.4';
+const APP_VERSION = '2.9.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -1491,6 +1499,16 @@ async function deleteWeek() {
 // ═══════════════════════════════════════════════════════════
 // KIDS TAB
 // ═══════════════════════════════════════════════════════════
+/** "3/15" from a stored YYYY-MM-DD birthday. */
+function birthdayLabel(birthday) {
+  const [, m, d] = birthday.split('-').map(Number);
+  return `${m}/${d}`;
+}
+
+function birthdayThisMonth(kid) {
+  return !!kid.birthday && Number(kid.birthday.slice(5, 7)) === new Date().getMonth() + 1;
+}
+
 function renderKidsTab() {
   const search = (document.getElementById('kids-search').value || '').trim().toLowerCase();
   const showInactive = document.getElementById('kids-show-inactive').checked;
@@ -1501,7 +1519,7 @@ function renderKidsTab() {
   const kids = sortKids(
     state.kids
       .filter(k => showInactive || k.active)
-      .filter(k => !search || k.name.toLowerCase().includes(search)),
+      .filter(k => !search || k.name.toLowerCase().includes(search) || (k.englishName || '').toLowerCase().includes(search)),
     state.kidsSortMode
   );
 
@@ -1512,12 +1530,14 @@ function renderKidsTab() {
 
   grid.innerHTML = kids.map((k, i) => {
     const score = computeScore(k.id, todayStr());
+    const bdayNow = birthdayThisMonth(k);
     return `
-    <div class="kid-card ${k.active ? '' : 'inactive'}">
+    <div class="kid-card ${k.active ? '' : 'inactive'} ${bdayNow ? 'bday' : ''}">
       ${k.active ? '' : '<div class="kid-card-flag">inactive</div>'}
       ${isPriority ? `<div class="kid-card-order">${i + 1}</div>` : ''}
       ${mediaThumbHTML(k, 'kid-card-media')}
-      <div class="kid-card-name">${escapeHtml(k.name)}</div>
+      <div class="kid-card-name">${escapeHtml(k.name)}${k.englishName ? ` <span class="kid-card-en">(${escapeHtml(k.englishName)})</span>` : ''}</div>
+      ${k.birthday ? `<div class="kid-card-bday">🎂 ${birthdayLabel(k.birthday)}${bdayNow ? ' · this month' : ''}</div>` : ''}
       <div class="kid-card-score">total ${fmtScore(score.total)}</div>
       <div class="kid-card-actions">
         ${isPriority ? `
@@ -1545,6 +1565,8 @@ function openKidModal(kidId) {
     const k = kidById(kidId);
     title.textContent = 'Edit child';
     nameInput.value = k.name;
+    document.getElementById('kid-english-input').value = k.englishName || '';
+    document.getElementById('kid-birthday-input').value = k.birthday || '';
     activeRow.classList.remove('hidden');
     activeInput.checked = k.active;
     if (k.media) {
@@ -1559,6 +1581,8 @@ function openKidModal(kidId) {
   } else {
     title.textContent = 'Add child';
     nameInput.value = '';
+    document.getElementById('kid-english-input').value = '';
+    document.getElementById('kid-birthday-input').value = '';
     activeRow.classList.add('hidden');
     activeInput.checked = true;
     removeBtn.classList.add('hidden');
@@ -1600,16 +1624,18 @@ async function saveKid() {
   const name = document.getElementById('kid-name-input').value.trim();
   if (!name) { showToast('Enter a name.'); return; }
   const active = document.getElementById('kid-active-input').checked;
+  const englishName = document.getElementById('kid-english-input').value.trim();
+  const birthday = document.getElementById('kid-birthday-input').value;   // YYYY-MM-DD, or '' when not given
 
   if (state.editingKidId) {
     const k = kidById(state.editingKidId);
-    const rec = { id: k.id, name, active, media: k.media, mediaType: k.mediaType, sortOrder: getSortOrder(k), createdAt: k.createdAt };
+    const rec = { id: k.id, name, englishName, birthday, active, media: k.media, mediaType: k.mediaType, sortOrder: getSortOrder(k), createdAt: k.createdAt };
     if (state.kidMediaFile === null) { rec.media = null; rec.mediaType = null; }
     else if (state.kidMediaFile instanceof File) { rec.media = state.kidMediaFile; rec.mediaType = state.kidMediaFile.type.startsWith('video/') ? 'video' : 'image'; }
     await dbPut('kids', rec);
   } else {
     const maxOrder = state.kids.reduce((m, k) => Math.max(m, getSortOrder(k)), -1);
-    const rec = { name, active: true, media: null, mediaType: null, sortOrder: maxOrder + 1, createdAt: Date.now() };
+    const rec = { name, englishName, birthday, active: true, media: null, mediaType: null, sortOrder: maxOrder + 1, createdAt: Date.now() };
     if (state.kidMediaFile instanceof File) { rec.media = state.kidMediaFile; rec.mediaType = state.kidMediaFile.type.startsWith('video/') ? 'video' : 'image'; }
     await dbAdd('kids', rec);
   }
@@ -1929,14 +1955,17 @@ async function copyHistoryText() {
     showToast('Copied to clipboard.');
   }
 }
-/** The roster as plain text, one name per line, sorted and filtered as the Kids tab shows it (search aside). */
+/**
+ * The roster as plain text, one child per line ("name, English name, birthday"),
+ * sorted and filtered as the Kids tab shows it (search aside).
+ */
 function downloadKidsText() {
   const showInactive = document.getElementById('kids-show-inactive').checked;
   const kids = sortKids(state.kids.filter(k => showInactive || k.active), state.kidsSortMode);
   if (kids.length === 0) { showToast('No children to save.'); return; }
   saveToDevice(
     `bestWorshiper_names_${todayStr()}.txt`,
-    kids.map(k => k.name).join('\n') + '\n',
+    kids.map(k => [k.name, k.englishName || '', k.birthday || ''].join(', ')).join('\n') + '\n',
     'text/plain;charset=utf-8'
   );
 }
@@ -2237,7 +2266,7 @@ async function importData(file) {
   const idMap = new Map();
   for (const k of (data.kids || [])) {
     const media = k.media ? await base64ToBlob(k.media) : null;
-    const newId = await dbAdd('kids', { name: k.name, active: k.active, media, mediaType: k.mediaType || null, sortOrder: k.sortOrder, createdAt: k.createdAt || Date.now() });
+    const newId = await dbAdd('kids', { name: k.name, englishName: k.englishName || '', birthday: k.birthday || '', active: k.active, media, mediaType: k.mediaType || null, sortOrder: k.sortOrder, createdAt: k.createdAt || Date.now() });
     idMap.set(k.id, newId);
   }
   for (const w of (data.weeks || [])) {
