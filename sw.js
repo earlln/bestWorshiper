@@ -1,5 +1,5 @@
 // Bump APP_CACHE_VERSION together with APP_VERSION in bestWorshiper.html
-const APP_CACHE_VERSION = '2.10.0';
+const APP_CACHE_VERSION = '2.11.0';
 const CACHE_NAME = 'bestworshiper-v' + APP_CACHE_VERSION;
 
 const ASSETS = [
@@ -8,6 +8,7 @@ const ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
+  './intro-jar.webp',
 ];
 
 self.addEventListener('install', (e) => {
