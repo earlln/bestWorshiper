@@ -61,7 +61,7 @@ dependencies {
 
 // Keep the APK's bundled copy of the web app in sync with the repo root,
 // so bestWorshiper.html stays the single source of truth.
-def webAssets = ['bestWorshiper.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'intro-jar.jpg']
+def webAssets = ['bestWorshiper.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'intro-jar.webp']
 
 tasks.register('syncWebAssets', Copy) {
     from(rootProject.projectDir.parentFile) {

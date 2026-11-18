@@ -443,7 +443,7 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
 /* How it works: the sign-up picture beside the rules */
 .cm-about-title { font-size: clamp(26px, 5vw, 56px); font-weight: 800; color: var(--gold); margin-bottom: 2vh; }
 .cm-about { display: flex; gap: 3vw; align-items: center; width: min(1300px, 96vw); text-align: left; }
-.cm-about-jar { flex: 0 0 36%; background: #fff; border-radius: 18px; padding: 8px; }
+.cm-about-jar { flex: 0 0 36%; }
 .cm-about-jar img { display: block; width: 100%; max-height: 62vh; object-fit: contain; }
 .cm-about-text { flex: 1; font-size: clamp(14px, 1.7vw, 24px); line-height: 1.4; }
 .cm-about-text p { margin: 0 0 0.35em; }
@@ -459,7 +459,7 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
   .cm-about-jar img { max-height: 30vh; }
   .cm-about-key { grid-template-columns: 1fr; }
 }
-.intro-image-preview { display: block; max-width: 220px; max-height: 220px; background: #fff; border-radius: 10px; padding: 4px; }
+.intro-image-preview { display: block; max-width: 220px; max-height: 220px; }
 
 /* Nominees: a face and a name each, sized by renderCeremony to fit them all */
 .cm-grid {
@@ -2623,7 +2623,7 @@ function startCeremonyFile(data) {
 // ═══════════════════════════════════════════════════════════
 // CEREMONY: "WHAT IS A BEST WORSHIPER?" SCREEN
 // ═══════════════════════════════════════════════════════════
-const DEFAULT_INTRO_IMAGE = 'intro-jar.jpg';   // ships beside the app
+const DEFAULT_INTRO_IMAGE = 'intro-jar.webp';   // ships beside the app; transparent around the jar
 
 /** The sign-up picture: the one chosen in Settings, else the bundled one. */
 function introImageURL() {
@@ -2637,13 +2637,19 @@ async function introImageDataURL() {
   try {
     const resp = await fetch(DEFAULT_INTRO_IMAGE);
     if (!resp.ok) return null;
-    return await blobToBase64(await resp.blob());
+    // The Android asset server may not know .webp and serve it untyped; say what it is.
+    const blob = await resp.blob();
+    return await blobToBase64(blob.type.startsWith('image/') ? blob : new Blob([blob], { type: 'image/webp' }));
   } catch (e) {
     return null;   // e.g. the page opened straight from a file, where fetch is not allowed
   }
 }
 
-/** Scales a chosen picture down to at most 1000px a side and keeps it as a JPEG data URL. */
+/**
+ * Scales a chosen picture down to at most 1000px a side and keeps it as a WebP
+ * data URL, which keeps a transparent background (browsers that can't write
+ * WebP hand back a PNG instead).
+ */
 async function changeIntroImage(e) {
   const file = e.target.files[0];
   e.target.value = '';
@@ -2654,11 +2660,8 @@ async function changeIntroImage(e) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bmp.width * scale);
     canvas.height = Math.round(bmp.height * scale);
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';   // transparent parts would turn black in a JPEG
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    await dbPut('settings', { key: 'introImage', value: canvas.toDataURL('image/jpeg', 0.85) });
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    await dbPut('settings', { key: 'introImage', value: canvas.toDataURL('image/webp', 0.85) });
     await loadAll();
     renderSettingsTab();
     showToast('Picture saved.');

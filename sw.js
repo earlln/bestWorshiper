@@ -8,7 +8,7 @@ const ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
-  './intro-jar.jpg',
+  './intro-jar.webp',
 ];
 
 self.addEventListener('install', (e) => {
