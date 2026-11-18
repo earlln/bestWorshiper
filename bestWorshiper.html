@@ -444,7 +444,7 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
 .cm-about-title { font-size: clamp(26px, 5vw, 56px); font-weight: 800; color: var(--gold); margin-bottom: 2vh; }
 .cm-about { display: flex; gap: 3vw; align-items: center; width: min(1300px, 96vw); text-align: left; }
 .cm-about-jar { flex: 0 0 56%; }
-.cm-about-jar img { display: block; width: 100%; max-height: 62vh; object-fit: contain; }
+.cm-about-jar img { display: block; width: 100%; max-height: 54vh; object-fit: contain; }
 .cm-about-text { flex: 1; font-size: clamp(14px, 1.6vw, 24px); line-height: 1.4; }
 .cm-about-text p { margin: 0 0 0.35em; }
 .cm-about-text b { color: var(--gold); }
@@ -452,6 +452,13 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
 .cm-about-how-title { color: var(--accent); font-weight: 700; }
 .cm-about-how ol { margin: 0.2em 0; padding-left: 1.4em; }
 .cm-about-bonus { margin-top: 0.5em; color: var(--gold); font-weight: 700; }
+/* The point of it all, a banner across the whole screen under the rules */
+.cm-about-most {
+  width: min(1300px, 96vw); margin-top: 1.6vh; padding: 0.5em 1em; border-radius: 14px;
+  background: rgba(255,215,64,0.12); border: 2px solid var(--gold);
+  font-size: clamp(15px, 1.9vw, 30px); line-height: 1.35; text-align: center;
+}
+.cm-about-most b { color: var(--gold); }
 @media (max-width: 700px) {
   .cm-about { flex-direction: column; gap: 12px; }
   .cm-about-jar { width: 100%; flex-basis: auto; }
@@ -849,7 +856,7 @@ const APP_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.11.1';
+const APP_VERSION = '2.11.2';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -2696,7 +2703,8 @@ function aboutScreenHTML() {
           <div class="cm-about-bonus">⭐ More circles = more bonus points!</div>
         </div>
       </div>
-    </div>`;
+    </div>
+    <div class="cm-about-most">❤️ But the most important thing of all: <b>worship God faithfully with all your heart!</b></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════
