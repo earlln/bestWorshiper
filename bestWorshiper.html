@@ -440,6 +440,27 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
 }
 .cm-photo img, .cm-photo video { width: 100%; height: 100%; object-fit: cover; }
 
+/* How it works: the sign-up picture beside the rules */
+.cm-about-title { font-size: clamp(26px, 5vw, 56px); font-weight: 800; color: var(--gold); margin-bottom: 2vh; }
+.cm-about { display: flex; gap: 3vw; align-items: center; width: min(1300px, 96vw); text-align: left; }
+.cm-about-jar { flex: 0 0 36%; background: #fff; border-radius: 18px; padding: 8px; }
+.cm-about-jar img { display: block; width: 100%; max-height: 62vh; object-fit: contain; }
+.cm-about-text { flex: 1; font-size: clamp(14px, 1.7vw, 24px); line-height: 1.4; }
+.cm-about-text p { margin: 0 0 0.35em; }
+.cm-about-text b { color: var(--gold); }
+.cm-about-how { margin-top: 0.6em; padding: 0.7em 1em; border: 2px solid var(--accent); border-radius: 14px; }
+.cm-about-how-title { color: var(--accent); font-weight: 700; }
+.cm-about-how ol { margin: 0.2em 0; padding-left: 1.4em; }
+.cm-about-key { display: grid; grid-template-columns: 1fr 1fr; gap: 0.1em 1em; font-size: 0.8em; color: #c5c8d8; margin-left: 0.3em; }
+.cm-about-bonus { margin-top: 0.5em; color: var(--gold); font-weight: 700; }
+@media (max-width: 700px) {
+  .cm-about { flex-direction: column; gap: 12px; }
+  .cm-about-jar { width: 55%; flex-basis: auto; }
+  .cm-about-jar img { max-height: 30vh; }
+  .cm-about-key { grid-template-columns: 1fr; }
+}
+.intro-image-preview { display: block; max-width: 220px; max-height: 220px; background: #fff; border-radius: 10px; padding: 4px; }
+
 /* Nominees: a face and a name each, sized by renderCeremony to fit them all */
 .cm-grid {
   display: flex; flex-wrap: wrap; gap: 14px 18px; justify-content: center; margin-top: 8px;
@@ -750,6 +771,15 @@ body.ceremony-file #ceremony-close { visibility: hidden; }
         <p class="hint" style="margin-top:4px"><b>Android</b>: open in Chrome → menu (⋮) → "Add to Home screen" / "Install app"</p>
       </div>
       <div class="card">
+        <h3>🫙 Sign-up picture</h3>
+        <p class="hint">Shown on the ceremony's "What is a Best Worshiper?" screen, right after the title.</p>
+        <img id="intro-image-preview" class="intro-image-preview" alt="">
+        <div class="row-actions" style="margin-top:10px">
+          <label class="btn file-btn">🖼 Change picture<input type="file" id="intro-image-input" accept="image/*" hidden></label>
+          <button id="intro-image-reset" class="btn">Use default</button>
+        </div>
+      </div>
+      <div class="card">
         <h3>📂 Ceremony file folder</h3>
         <p class="hint">The folder on the USB stick (or under Download/bestWorshiper on the phone) that
         <code>BestWorshiper_날짜.html</code> is saved into. Leave empty to save at the top.</p>
@@ -821,7 +851,7 @@ const APP_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 // ═══════════════════════════════════════════════════════════
 // APP VERSION
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.11.0';
 
 // ═══════════════════════════════════════════════════════════
 // INDEXEDDB LAYER
@@ -904,6 +934,7 @@ const DEFAULT_SETTINGS = {
   nominationBonus: 1,  // points for each week nominated inside that window
   ceremonyScript: DEFAULT_SCRIPT,
   deckSubfolder: 'EM',   // folder on the stick or phone the ceremony file is saved into
+  introImage: null,      // data URL of the sign-up picture on the ceremony's "how it works" screen; null = the bundled one
 };
 
 const state = {
@@ -2146,6 +2177,8 @@ window.onDestinationPicked = () => {
 };
 
 function renderSettingsTab() {
+  document.getElementById('intro-image-preview').src = introImageURL();
+  document.getElementById('intro-image-reset').classList.toggle('hidden', !state.settings.introImage);
   renderDestination();
   document.getElementById('settings-deck-subfolder').value = state.settings.deckSubfolder ?? DEFAULT_SETTINGS.deckSubfolder;
 
@@ -2549,7 +2582,7 @@ async function buildCeremonyFile(saved) {
     const jpeg = await photoForSlide(kid, 480);
     kids.push({ id, name: kid.name, photo: jpeg ? 'data:image/jpeg;base64,' + base64FromBytes(jpeg) : null });
   }
-  const data = { date: state.currentWeekDate, nominees, winners: saved.winnerIds, kids };
+  const data = { date: state.currentWeekDate, nominees, winners: saved.winnerIds, kids, introImage: await introImageDataURL() };
   // "<" escaped so a name can never close the script tag early.
   const json = JSON.stringify(data).replace(/</g, '\\u003c');
   // The icons and manifest sit next to the app, not next to the file, so leave them out.
@@ -2575,6 +2608,8 @@ function startCeremonyFile(data) {
   }));
   state.currentWeekDate = data.date;
   state.weeks = [{ date: data.date, candidateIds: data.nominees, winnerIds: data.winners }];
+  // The file sits on its own, so the picture travels inside it; without one the screen shows text only.
+  state.settings.introImage = data.introImage || '';
   const goFull = () => {
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -2583,6 +2618,90 @@ function startCeremonyFile(data) {
   document.addEventListener('keydown', goFull, true);
   document.addEventListener('click', goFull, true);
   openCeremony();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CEREMONY: "WHAT IS A BEST WORSHIPER?" SCREEN
+// ═══════════════════════════════════════════════════════════
+const DEFAULT_INTRO_IMAGE = 'intro-jar.jpg';   // ships beside the app
+
+/** The sign-up picture: the one chosen in Settings, else the bundled one. */
+function introImageURL() {
+  if (window.CEREMONY_FILE) return state.settings.introImage;
+  return state.settings.introImage || DEFAULT_INTRO_IMAGE;
+}
+
+/** The sign-up picture as a data URL, so an exported ceremony file carries it. Null if it can't be read. */
+async function introImageDataURL() {
+  if (state.settings.introImage) return state.settings.introImage;
+  try {
+    const resp = await fetch(DEFAULT_INTRO_IMAGE);
+    if (!resp.ok) return null;
+    return await blobToBase64(await resp.blob());
+  } catch (e) {
+    return null;   // e.g. the page opened straight from a file, where fetch is not allowed
+  }
+}
+
+/** Scales a chosen picture down to at most 1000px a side and keeps it as a JPEG data URL. */
+async function changeIntroImage(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';   // transparent parts would turn black in a JPEG
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    await dbPut('settings', { key: 'introImage', value: canvas.toDataURL('image/jpeg', 0.85) });
+    await loadAll();
+    renderSettingsTab();
+    showToast('Picture saved.');
+  } catch (err) {
+    showToast('Could not read that picture.');
+  }
+}
+
+async function resetIntroImage() {
+  await dbDelete('settings', 'introImage');
+  await loadAll();
+  renderSettingsTab();
+  showToast('Using the default picture.');
+}
+
+function aboutScreenHTML() {
+  const img = introImageURL();
+  return `
+    <div class="cm-kicker">HOW IT WORKS</div>
+    <div class="cm-about-title">What is a Best Worshiper?</div>
+    <div class="cm-about">
+      ${img ? `<div class="cm-about-jar"><img src="${img}" alt=""></div>` : ''}
+      <div class="cm-about-text">
+        <p>🙋 <b>Anyone</b> can be a nominee — just sign up!</p>
+        <p>🏆 Best Worshipers are chosen <b>only from the nominees</b>.</p>
+        <p>📍 Sign up <b>right here, at the entrance</b>.</p>
+        <p>⏰ Sign up <b>at least 10 minutes before</b> worship starts.</p>
+        <div class="cm-about-how">
+          <div class="cm-about-how-title">How to sign up</div>
+          <ol>
+            <li>Write your name on the <b>lid</b> of the jar.</li>
+            <li><b>Circle</b> every picture that is true for you today:</li>
+          </ol>
+          <div class="cm-about-key">
+            <span>📖 I brought my Bible.</span><span>📰 I read the bulletin.</span>
+            <span>🧹 I helped clean up.</span><span>👟 I lined up my shoes neatly.</span>
+            <span>🙇 I greeted people politely.</span><span>⏰ I came 10 minutes early.</span>
+            <span>👍 I did something kind.</span>
+          </div>
+          <div class="cm-about-bonus">⭐ More circles = more bonus points!</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2600,13 +2719,13 @@ const ceremony = {
 };
 
 /**
- * The running order. With a nominee grid: intro, the nominees in colour, then
+ * The running order. With a nominee grid: intro, how it works, the nominees in colour, then
  * for each winner a "ready" screen (everyone greyed, "1 / 6" on top) and a
  * "spin" screen (the roulette lands on the winner), then the finale. Weeks
  * saved without nominees fall back to a drumroll and a reveal per winner.
  */
 function buildCeremonyPlan() {
-  const plan = [{ kind: 'intro' }];
+  const plan = [{ kind: 'intro' }, { kind: 'about' }];
   const grid = ceremony.nominees.length > 0;
   if (grid) plan.push({ kind: 'nominees' });
   ceremony.winners.forEach((_, i) => {
@@ -2693,6 +2812,9 @@ function renderCeremony() {
       <div class="cm-sub">${state.currentWeekDate}</div>
       <div class="cm-sub">${meetTodayLine()}</div>`;
     hint.textContent = 'Tap to begin';
+  } else if (s.kind === 'about') {
+    stage.innerHTML = aboutScreenHTML();
+    hint.textContent = 'Tap to meet the nominees';
   } else if (['nominees', 'ready', 'spin'].includes(s.kind)) {
     renderCeremonyGrid(s);
   } else if (s.kind === 'finale') {
@@ -3083,6 +3205,8 @@ document.addEventListener('keydown', e => {
 
 document.getElementById('kids-search').addEventListener('input', renderKidsTab);
 document.getElementById('kids-text-btn').addEventListener('click', downloadKidsText);
+document.getElementById('intro-image-input').addEventListener('change', changeIntroImage);
+document.getElementById('intro-image-reset').addEventListener('click', resetIntroImage);
 document.getElementById('kids-details-btn').addEventListener('click', downloadKidsDetails);
 document.getElementById('kids-sort-mode').addEventListener('change', e => {
   state.kidsSortMode = e.target.value;

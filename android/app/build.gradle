@@ -10,8 +10,8 @@ android {
         applicationId "com.earlln.bestworshiper"
         minSdk 24
         targetSdk 34
-        versionCode 41
-        versionName "2.10.0"
+        versionCode 42
+        versionName "2.11.0"
     }
 
     // Release builds are signed with the same key the earlier sideloaded APKs
@@ -61,7 +61,7 @@ dependencies {
 
 // Keep the APK's bundled copy of the web app in sync with the repo root,
 // so bestWorshiper.html stays the single source of truth.
-def webAssets = ['bestWorshiper.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']
+def webAssets = ['bestWorshiper.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'intro-jar.jpg']
 
 tasks.register('syncWebAssets', Copy) {
     from(rootProject.projectDir.parentFile) {
